@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isReservedSlug, slugify } from "@/lib/utils";
+import { slugify } from "@/lib/utils";
+import { isReservedSlug } from "@/lib/tenant";
 
 const SLUG_RE = /^[a-z0-9-]{2,40}$/;
 

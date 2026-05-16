@@ -1,0 +1,39 @@
+# Tema Sindicompany — paleta, identidade, tipografia.
+#
+# Este arquivo é o ÚNICO lugar onde a marca aparece. Trocar este arquivo
+# por outro tema (ex: tema-outra-administradora.yaml) faz a engine renderizar
+# a revista com identidade visual diferente — sem mexer em código.
+
+identidade:
+  nome: Sindicompany
+  handle: "@sindicompanybr"
+  tagline: "Por mais lares."
+
+paleta:
+  onix:        "#1A1C29"
+  sand:        "#DABDA9"
+  sand_90:     "#EFCAAF"
+  sand_80:     "#D4AE94"
+  mint:        "#84C7D3"
+  mint_80:     "#76B1BC"
+  lavender:    "#B8C0FF"
+  white:       "#FFFFFF"
+  gray_5:      "#F4F4F5"
+  gray_20:     "#E0E0E2"
+
+tipografia:
+  titulos:
+    family: Provicali
+    files:
+      - { weight: 400, style: normal, file: fonts/Provicali.otf, format: opentype }
+  corpo:
+    family: Epilogue
+    files:
+      # Variable woff2 cobre todos os pesos 100-900 num único arquivo
+      - { weight: "100 900", style: normal, file: fonts/Epilogue-Variable.woff2, format: "woff2-variations" }
+      - { weight: "100 900", style: italic, file: fonts/Epilogue-VariableItalic.woff2, format: "woff2-variations" }
+
+logos:
+  mono:  logos/sindicompany-mono.svg    # Onix sólido (sobre fundos claros)
+  color: logos/sindicompany-color.svg   # Mint+Onix+Sand (oficial)
+  white: logos/sindicompany-white.svg   # Branco (sobre fundos escuros)

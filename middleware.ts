@@ -27,5 +27,18 @@ export async function middleware(request: NextRequest) {
     return rewrite;
   }
 
+  if (tenant.kind === "sindicompany") {
+    const url = request.nextUrl.clone();
+    if (url.pathname.startsWith("/sindicompany")) {
+      return sessionResponse;
+    }
+    url.pathname = `/sindicompany${url.pathname === "/" ? "" : url.pathname}`;
+    const rewrite = NextResponse.rewrite(url, { request });
+    sessionResponse.cookies.getAll().forEach((c) => {
+      rewrite.cookies.set(c.name, c.value);
+    });
+    return rewrite;
+  }
+
   return sessionResponse;
 }

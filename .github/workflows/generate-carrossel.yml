@@ -1,0 +1,55 @@
+name: Gerar carrossel Instagram (Sindicompany)
+
+# Disparado pelo painel quando a editora cria/regera um carrossel:
+# POST /repos/.../actions/workflows/generate-carrossel.yml/dispatches
+# body: { ref: "main", inputs: { carrossel_id: "<UUID>" } }
+on:
+  workflow_dispatch:
+    inputs:
+      carrossel_id:
+        description: 'UUID do carrossel (linha em public.carrosseis)'
+        required: true
+        type: string
+
+jobs:
+  gerar-pngs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: revista-engine
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar libs de sistema (Playwright + WeasyPrint)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libcairo2 \
+            libgdk-pixbuf-2.0-0 shared-mime-info \
+            fonts-liberation fonts-dejavu
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'revista-engine/requirements.txt'
+
+      - name: Instalar dependências Python
+        run: pip install -r requirements.txt
+
+      - name: Instalar Chromium do Playwright
+        run: |
+          python -m playwright install --with-deps chromium
+
+      - name: Gerar PNGs do carrossel e atualizar banco
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: gpt-4o-mini
+        run: |
+          python -m api.carrossel_generate "${{ inputs.carrossel_id }}"

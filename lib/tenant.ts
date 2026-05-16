@@ -1,4 +1,5 @@
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "sindico.info";
+const SINDICOMPANY_DOMAIN = process.env.NEXT_PUBLIC_SINDICOMPANY_DOMAIN ?? "sindicompany.info";
 
 const RESERVED_SUBDOMAINS = new Set([
   "www",
@@ -15,12 +16,22 @@ const RESERVED_SUBDOMAINS = new Set([
 
 export type TenantContext =
   | { kind: "root" }
-  | { kind: "tenant"; slug: string };
+  | { kind: "tenant"; slug: string }
+  | { kind: "sindicompany" };
 
 export function resolveTenantFromHost(host: string | null): TenantContext {
   if (!host) return { kind: "root" };
 
   const cleanHost = host.split(":")[0].toLowerCase();
+
+  // Sindicompany backoffice (separate domain)
+  if (
+    cleanHost === SINDICOMPANY_DOMAIN ||
+    cleanHost === `www.${SINDICOMPANY_DOMAIN}` ||
+    cleanHost === "sindicompany.localhost"
+  ) {
+    return { kind: "sindicompany" };
+  }
 
   if (cleanHost === "localhost" || cleanHost === "127.0.0.1") {
     return { kind: "root" };

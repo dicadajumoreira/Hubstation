@@ -1,0 +1,26 @@
+# Engine de PDF
+weasyprint>=63.0
+Pillow>=10.0
+
+# Supabase (DB + Storage) — usado pelo api/generate.py
+supabase>=2.5.0
+
+# Geração de texto (cartas) + imagens (DALL-E 3 / gpt-image-1).
+# >=1.70 garante suporte ao gpt-image-1 (lançado 2025).
+openai>=1.70.0
+
+# Drive integration (frente futura)
+gdown>=5.0.0
+google-api-python-client>=2.100.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
+
+# Auxiliares
+markdown>=3.5
+pyyaml>=6.0
+
+# Rasterização de PDF da prestação de contas pra Vision OCR
+pypdfium2>=4.30.0
+
+# Render de carrossel Instagram (HTML → PNG 4K)
+playwright>=1.45.0
