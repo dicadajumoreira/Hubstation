@@ -78,3 +78,62 @@ export async function getMarca(slug: string): Promise<Marca | null> {
   if (error || !data) return null;
   return fromRow(data as MarcaRow);
 }
+
+export interface MarcaInput {
+  slug: string;
+  nome: string;
+  handle: string;
+  nicho?: string | null;
+  bucketPrefix: string;
+  routeSlug: string;
+  ativo?: boolean;
+  ordem?: number;
+  persona?: string | null;
+  assinatura?: string | null;
+  temasSugeridos?: string[] | null;
+}
+
+export async function createMarca(input: MarcaInput): Promise<Marca> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from(TABLE)
+    .insert({
+      slug: input.slug,
+      nome: input.nome,
+      handle: input.handle,
+      nicho: input.nicho ?? null,
+      bucket_prefix: input.bucketPrefix,
+      route_slug: input.routeSlug,
+      ativo: input.ativo ?? true,
+      ordem: input.ordem ?? 0,
+      persona: input.persona ?? null,
+      assinatura: input.assinatura ?? null,
+      temas_sugeridos: input.temasSugeridos ?? null,
+    })
+    .select()
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "Falha ao criar marca.");
+  return fromRow(data as MarcaRow);
+}
+
+// Atualiza por slug (identidade estavel). slug NAO muda: e a FK de
+// carrosseis.brand e o prefixo dos buckets.
+export async function updateMarca(
+  slug: string,
+  patch: Partial<Omit<MarcaInput, "slug">>,
+): Promise<void> {
+  const supabase = createAdminClient();
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.nome !== undefined) row.nome = patch.nome;
+  if (patch.handle !== undefined) row.handle = patch.handle;
+  if (patch.nicho !== undefined) row.nicho = patch.nicho;
+  if (patch.bucketPrefix !== undefined) row.bucket_prefix = patch.bucketPrefix;
+  if (patch.routeSlug !== undefined) row.route_slug = patch.routeSlug;
+  if (patch.ativo !== undefined) row.ativo = patch.ativo;
+  if (patch.ordem !== undefined) row.ordem = patch.ordem;
+  if (patch.persona !== undefined) row.persona = patch.persona;
+  if (patch.assinatura !== undefined) row.assinatura = patch.assinatura;
+  if (patch.temasSugeridos !== undefined) row.temas_sugeridos = patch.temasSugeridos;
+  const { error } = await supabase.from(TABLE).update(row).eq("slug", slug);
+  if (error) throw new Error(error.message);
+}
