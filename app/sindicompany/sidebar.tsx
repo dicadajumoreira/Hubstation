@@ -33,6 +33,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "@consvictabr", href: "/sindicompany/carrossel/novo?brand=consvictabr" },
     ],
   },
+  { label: "Marcas", href: "/sindicompany/marcas", emoji: "🏷️" },
   { label: "Condomínios", href: "/sindicompany/condominios", emoji: "🏢",
     children: [
       { label: "Lista de condomínios", href: "/sindicompany/condominios" },

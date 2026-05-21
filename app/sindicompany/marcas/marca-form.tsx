@@ -1,0 +1,197 @@
+import type { Marca } from "@/lib/sindicompany/marcas-db";
+
+const inputCls =
+  "block w-full rounded-md border border-onix-100 bg-white px-3 py-2 text-sm text-onix-900 focus:outline-none focus:ring-2 focus:ring-mint-300";
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-onix-900">{label}</label>
+      {hint && <p className="text-xs text-g60">{hint}</p>}
+      {children}
+    </div>
+  );
+}
+
+/** Form de criar/editar marca. `marca` ausente = criar. Na edicao o slug
+ *  e read-only (e a FK de carrosseis.brand e o prefixo dos buckets). */
+export function MarcaForm({
+  action,
+  marca,
+}: {
+  action: (formData: FormData) => void | Promise<void>;
+  marca?: Marca;
+}) {
+  const isEdit = !!marca;
+  return (
+    <form action={action} className="space-y-6">
+      {isEdit && <input type="hidden" name="slug" value={marca.slug} />}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Nome" hint="Como a marca aparece no painel.">
+          <input
+            type="text"
+            name="nome"
+            defaultValue={marca?.nome ?? ""}
+            required
+            maxLength={80}
+            placeholder="Ex: Consvicta"
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Handle" hint="O @ do Instagram.">
+          <input
+            type="text"
+            name="handle"
+            defaultValue={marca?.handle ?? ""}
+            required
+            maxLength={60}
+            placeholder="Ex: @consvictabr"
+            className={inputCls}
+          />
+        </Field>
+      </div>
+
+      {isEdit ? (
+        <Field label="Slug" hint="Identificador estável — não pode mudar (é a referência dos carrosséis e dos buckets).">
+          <input
+            type="text"
+            defaultValue={marca.slug}
+            disabled
+            className={`${inputCls} bg-onix-50 text-g60`}
+          />
+        </Field>
+      ) : (
+        <Field
+          label="Slug"
+          hint="Identificador único (minúsculas, sem espaço). Ex: minhamarca. É permanente."
+        >
+          <input
+            type="text"
+            name="slug"
+            required
+            maxLength={40}
+            placeholder="minhamarca"
+            className={inputCls}
+          />
+        </Field>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Nicho" hint="Livre. Ex: condominial, fitness, jurídico.">
+          <input
+            type="text"
+            name="nicho"
+            defaultValue={marca?.nicho ?? ""}
+            maxLength={60}
+            placeholder="condominial"
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Assinatura" hint="Frase de fechamento da legenda.">
+          <input
+            type="text"
+            name="assinatura"
+            defaultValue={marca?.assinatura ?? ""}
+            maxLength={120}
+            placeholder="Ex: Por mais lares."
+            className={inputCls}
+          />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Field
+          label="Prefixo dos buckets"
+          hint={isEdit ? "Prefixo dos assets no storage." : "Vazio = __<slug>-"}
+        >
+          <input
+            type="text"
+            name="bucket_prefix"
+            defaultValue={marca?.bucketPrefix ?? ""}
+            maxLength={40}
+            placeholder="__minhamarca-"
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Rota dos assets" hint={isEdit ? undefined : "Vazio = <slug>-assets"}>
+          <input
+            type="text"
+            name="route_slug"
+            defaultValue={marca?.routeSlug ?? ""}
+            maxLength={60}
+            placeholder="minhamarca-assets"
+            className={inputCls}
+          />
+        </Field>
+        <Field label="Ordem" hint="Posição no seletor.">
+          <input
+            type="number"
+            name="ordem"
+            defaultValue={marca?.ordem ?? 0}
+            className={inputCls}
+          />
+        </Field>
+      </div>
+
+      <Field
+        label="Persona (guia de copy)"
+        hint="O system prompt da marca: voz, público, tom, o que viraliza, o que nunca fazer. É o que dirige o copy gerado."
+      >
+        <textarea
+          name="persona"
+          defaultValue={marca?.persona ?? ""}
+          rows={16}
+          placeholder="Você é especialista em criar carrosséis para o Instagram da ..."
+          className={`${inputCls} font-mono text-xs leading-relaxed`}
+        />
+      </Field>
+
+      <Field
+        label="Temas sugeridos"
+        hint="Um tema por linha. Aparecem no seletor de tema do /carrossel/novo."
+      >
+        <textarea
+          name="temas"
+          defaultValue={(marca?.temasSugeridos ?? []).join("\n")}
+          rows={8}
+          placeholder={"Direitos do morador\nInadimplência\nOutro"}
+          className={`${inputCls} text-xs`}
+        />
+      </Field>
+
+      <label className="flex items-center gap-2 text-sm text-onix-900">
+        <input
+          type="checkbox"
+          name="ativo"
+          defaultChecked={marca ? marca.ativo : true}
+          className="rounded border-onix-200"
+        />
+        Marca ativa (aparece no seletor de carrossel)
+      </label>
+
+      <div className="flex items-center gap-3 pt-2">
+        <button
+          type="submit"
+          className="inline-flex items-center px-4 py-2.5 rounded-lg bg-onix-900 text-white font-medium hover:bg-onix-800 text-sm"
+        >
+          {isEdit ? "Salvar alterações" : "Criar marca"}
+        </button>
+        <a
+          href="/sindicompany/marcas"
+          className="text-sm text-g60 hover:text-onix-900"
+        >
+          Cancelar
+        </a>
+      </div>
+    </form>
+  );
+}
