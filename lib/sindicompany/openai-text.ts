@@ -4,6 +4,7 @@
  */
 
 import type { CarrosselCopy, CarrosselSlide } from "./carrosseis";
+import { getMarca, listMarcas } from "./marcas-db";
 
 const OPENAI_API = "https://api.openai.com/v1/chat/completions";
 
@@ -105,94 +106,23 @@ interface ChatErr {
 }
 
 // ---------------------------------------------------------------------------
-// Persona por marca. As duas marcas pertencem ao mesmo ecossistema mas tem
-// objetivo, publico e linguagem COMPLETAMENTE diferentes:
-//   @sindicompanybr -> fala COM o morador comum. Educa, desmistifica.
-//   @bysindicompany -> fala COM o sindico profissional / aspirante. Aspiracional,
-//                      provocativa, estrategica, empresarial. Vende estrutura,
-//                      pertencimento, crescimento, posicionamento, autoridade.
+// System prompts. A PERSONA de cada marca (voz, publico, tom, o que viraliza)
+// agora vive na tabela `marcas` (coluna persona) — leia via getMarca(slug).
+// As constantes abaixo sao genericas: fallback pra marca sem persona e o
+// system prompt das tarefas de TRADUCAO (que nao precisam de voz de marca).
 // ---------------------------------------------------------------------------
-const SYSTEM_SINDICOMPANYBR =
-  "Você é redator do Instagram @sindicompanybr (Sindicompany — síndicos " +
-  "profissionais, SP e RJ). VOCÊ FALA COM O MORADOR COMUM do condomínio — " +
-  "não com o síndico. Escreve como pessoa inteligente corrigindo um amigo, " +
-  "NUNCA como empresa instruindo cliente. Voz: começa dentro da cabeça do " +
-  "leitor, frases curtas (um sujeito, um predicado, acabou), tom direto. " +
-  "Português brasileiro com TODOS os acentos corretos (você, síndico, " +
-  "condomínio, gestão, está, são). " +
-  "PROIBIDO: gerúndio (evitando, garantindo, proporcionando), linguagem " +
-  "corporativa (soluções integradas, atendimento acolhedor, gestão " +
-  "eficiente, excelência), frases de introdução (é importante ressaltar, " +
-  "levando em consideração, nesse contexto, vale destacar), CTA comercial " +
-  "em corpo de post educativo (Fale com a Sindicompany, Entre em contato), " +
-  "travessão (—), aspas curvas (“ ”), emoji decorativo, negrito mecânico. " +
-  "Use apenas aspas retas (\"). Sempre termine cada post (legenda) com " +
-  "'Por mais lares. 🏡'.";
+const SYSTEM_FALLBACK =
+  "Você é redator de carrosséis de Instagram. Português brasileiro com " +
+  "TODOS os acentos corretos. Voz humana, frases curtas e diretas, sem " +
+  "linguagem corporativa vazia. Use apenas aspas retas (\").";
 
-const SYSTEM_BYSINDICOMPANY =
-  "Você é redator do Instagram @bysindicompany — a marca da Sindicompany " +
-  "voltada para SÍNDICOS PROFISSIONAIS, pessoas que querem entrar na " +
-  "sindicatura e síndicos em crescimento. VOCÊ NÃO FALA COM O MORADOR — " +
-  "fala com quem GERE (ou quer gerir) condomínios profissionalmente, e com " +
-  "parceiros estratégicos do mercado. Tom: ASPIRACIONAL, PROVOCATIVO, " +
-  "ESTRATÉGICO, EMPRESARIAL. Você vende ESTRUTURA, PERTENCIMENTO, " +
-  "CRESCIMENTO, POSICIONAMENTO, AUTORIDADE, DESENVOLVIMENTO PROFISSIONAL, " +
-  "ESCALA, NETWORKING e SUPORTE. Cada post precisa: atrair síndicos, gerar " +
-  "desejo de pertencimento, fortalecer a marca pessoal do síndico, mostrar " +
-  "que existe estrutura e suporte por trás, transmitir sensação de rede " +
-  "forte e crescimento, elevar o nível da sindicatura profissional. " +
-  "Escreve como MENTOR que já chegou onde o leitor quer chegar — não como " +
-  "empresa vendendo serviço, não como guru motivacional vazio. Português " +
-  "brasileiro com TODOS os acentos corretos. " +
-  "PROIBIDO: gerúndio (evitando, garantindo, proporcionando), linguagem " +
-  "corporativa vazia (soluções integradas, sinergia, excelência, " +
-  "transformação digital), clichê motivacional (o sucesso é uma jornada, " +
-  "acredite no seu potencial, saia da zona de conforto, o céu é o limite), " +
-  "frases de introdução (é importante ressaltar, vale destacar, nesse " +
-  "contexto), travessão (—), aspas curvas (“ ”), emoji decorativo, negrito " +
-  "mecânico. Use apenas aspas retas (\"). Sempre termine cada post " +
-  "(legenda) com 'By Sindicompany. Sindicatura no próximo nível.'";
-
-const SYSTEM_CONSVICTABR =
-  "Você é redator do Instagram @consvictabr (Consvicta — Gestão Condominial " +
-  "Boutique, SP & RJ, desde 2019). " +
-  "MARCA: Consvicta é uma ADMINISTRADORA BOUTIQUE de condomínios. NÃO é " +
-  "plataforma de gestão. É equipe especializada que conhece cada prédio de " +
-  "perto. Cada condomínio tem seu próprio jeito de funcionar; cada " +
-  "balancete é personalizado; cada plano de contas é customizado. Mais de " +
-  "20 anos de experiência no mercado condominial. Tagline oficial: " +
-  "'Administração condominial que entrega resultado.' " +
-  "PÚBLICO: você fala com SÍNDICOS PROFISSIONAIS, conselheiros consultivos, " +
-  "proprietários atentos e tomadores de decisão de prédios de alto padrão " +
-  "em SP e RJ. NÃO fala com o morador comum. " +
-  "TOM: premium, próximo, técnico mas humano. Confiante sem ser arrogante. " +
-  "Pensamento estruturado, frases curtas e diretas, voz própria. Português " +
-  "brasileiro com TODOS os acentos corretos. " +
-  "VENDE: experiência (20+ anos), atendimento boutique (não plataforma), " +
-  "personalização real (balancete e plano de contas sob medida), proximidade, " +
-  "decisão informada, prédio tratado como único, gente que conhece o seu " +
-  "condomínio pelo nome. " +
-  "NÃO VENDE: tecnologia genérica, dashboard padrão, escala, 'transformação " +
-  "digital', velocidade barata. " +
-  "PROIBIDO: gerúndio decorativo (evitando, garantindo, proporcionando, " +
-  "destacando), linguagem corporativa vazia (soluções integradas, sinergia, " +
-  "excelência, transformação digital, atendimento acolhedor), clichê " +
-  "motivacional (acredite no seu potencial, saia da zona de conforto, o " +
-  "céu é o limite), frases de introdução (é importante ressaltar, vale " +
-  "destacar, nesse contexto), travessão (—), aspas curvas (“ ”), " +
-  "emoji decorativo, negrito mecânico. Use apenas aspas retas (\"). " +
-  "Sempre termine cada post (legenda) com 'Consvicta. Administração " +
-  "condominial que entrega resultado.'";
-
-function _systemPrompt(brand: string): string {
-  if (brand === "bysindicompany") return SYSTEM_BYSINDICOMPANY;
-  if (brand === "consvictabr") return SYSTEM_CONSVICTABR;
-  return SYSTEM_SINDICOMPANYBR;
-}
+const TRANSLATOR_SYSTEM =
+  "Você é um tradutor técnico português→inglês para prompts de geração de " +
+  "imagem. Responda apenas com o JSON pedido, sem comentários.";
 
 async function chat(
   prompt: string,
-  brand = "sindicompanybr",
+  systemPrompt: string = SYSTEM_FALLBACK,
 ): Promise<ChatOk | ChatErr> {
   const apiKey = (process.env.OPENAI_API_KEY ?? "").trim().replace(/^Bearer\s+/i, "");
   if (!apiKey || !apiKey.startsWith("sk-")) {
@@ -215,7 +145,7 @@ async function chat(
       body: JSON.stringify({
         model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
         messages: [
-          { role: "system", content: _systemPrompt(brand) },
+          { role: "system", content: systemPrompt },
           { role: "user", content: prompt },
         ],
         temperature: 0.85,
@@ -251,108 +181,41 @@ async function chat(
   return { ok: true, content };
 }
 
-// PASSO 0 — objetivo do carrossel (@sindicompanybr). Define o que o
-// post precisa provocar: muda tom, gancho, formato ideal, CTA, slides
-// e criterio de sucesso. Um carrossel = UMA intencao principal.
+// PASSO 0 — objetivo do carrossel. GLOBAL pra todas as marcas: define o
+// que o post precisa provocar (tom, gancho, CTA, criterio de sucesso).
+// A VOZ de cada marca vem da persona (tabela marcas), nao daqui. Um
+// carrossel = UMA intencao principal.
 const OBJETIVO_INSTRUCOES: Record<string, string> = {
   comentarios:
     `OBJETIVO: GERAR COMENTÁRIOS (DEBATE).\n` +
     `- O carrossel PRECISA dividir opiniões com dois lados reconhecíveis. Sucesso = discussão nos comentários, não alcance.\n` +
-    `- CTA SEMPRE binário, duas respostas opostas fáceis de comentar: "SIM ou NÃO", "CONCORDO ou DISCORDO", "MORADOR CERTO ou SÍNDICO CERTO", "MULTARIA ou RELEVARIA", "BARULHO NORMAL ou FALTA DE BOM SENSO". NUNCA "o que você acha?", "comenta aqui", "me conta sua opinião" — CTA aberto reduz comentários.\n` +
+    `- CTA SEMPRE binário, duas respostas opostas fáceis de comentar (ex: "SIM ou NÃO", "CONCORDO ou DISCORDO", "COBRARIA ou RELEVARIA"). NUNCA "o que você acha?", "comenta aqui" — CTA aberto reduz comentários.\n` +
     `- O tema precisa ter DOIS lados defensáveis. Sem conflito legítimo não há debate.\n` +
-    `- Estrutura: gancho forte → crescimento de tensão → situação reconhecível → dois lados claros no final. O ÚLTIMO SLIDE nomeia explicitamente os dois lados — o leitor precisa saber exatamente o que comentar.\n` +
-    `- Não cite lei como muleta; o foco é o conflito humano, não a aula jurídica.`,
+    `- O ÚLTIMO SLIDE nomeia explicitamente os dois lados — o leitor precisa saber exatamente o que comentar.`,
   salvamentos:
     `OBJETIVO: GERAR SALVAMENTOS (UTILIDADE).\n` +
-    `- O post precisa ser tão útil que o leitor queira guardar pra consultar depois. Sensação: "vou precisar disso um dia". Sucesso = salvamentos, compartilhamentos, envio em grupos de condomínio. Comentários NÃO são prioridade.\n` +
-    `- Linguagem objetiva, confiável, MENOS emocional — percepção de "referência".\n` +
-    `- SEMPRE que possível ancore: lei, artigo, norma, jurisprudência, regra prática, números. Destaque visual pra artigos, números, regras e exceções (use o título do slide pra isso).\n` +
-    `- CTA foca em SALVAR: "Salva esse post.", "Guarda isso antes de precisar.", "Manda no grupo do condomínio.", "Você vai precisar disso um dia." NUNCA CTA de debate.\n` +
-    `- Estrutura: títulos extremamente claros, leitura rápida, uma ideia por slide, informação escaneável.`,
+    `- O post precisa ser tão útil que o leitor queira guardar pra consultar depois. Sucesso = salvamentos, compartilhamentos, envio em grupos. Comentários NÃO são prioridade.\n` +
+    `- Linguagem objetiva, confiável, menos emocional — percepção de "referência".\n` +
+    `- SEMPRE que possível ancore: lei, artigo, norma, número, regra prática. Destaque visual pra artigos, números e exceções.\n` +
+    `- CTA foca em SALVAR ("Salva esse post.", "Manda no grupo."). NUNCA CTA de debate.`,
   clientes:
     `OBJETIVO: ATRAIR NOVOS CLIENTES.\n` +
-    `- Síndicos/conselheiros/moradores insatisfeitos precisam perceber que vivem um problema de GESTÃO. Sucesso = DMs, leads, pedidos de orçamento, cliques no link da bio.\n` +
-    `- NUNCA venda diretamente. Mostre o caos, a dor, o "antes" e o resultado final. O leitor pensa: "meu condomínio está exatamente assim".\n` +
-    `- Problemas que funcionam: inadimplência alta, obras paradas, conflitos internos, falta de transparência, má comunicação, fundo zerado, manutenção negligenciada, assembleia desorganizada, síndico ausente, excesso de reclamações.\n` +
-    `- Resultado SEMPRE com números reais: economia, redução de inadimplência, prazo de obra, valorização, organização. Específico converte mais que promessa genérica.\n` +
-    `- A marca PODE aparecer mais, o logo pode ter protagonismo, e a tagline "Por mais lares." pode entrar no fechamento.\n` +
-    `- CTA leve, nunca anúncio direto: "Seu condomínio está assim?", "A gente resolve.", "Fala com a gente.", "Link na bio.".`,
-  educar:
-    `OBJETIVO: EDUCAR MORADORES.\n` +
-    `- Ensinar algo que o morador não sabe mas deveria saber. Gatilho: SURPRESA + IDENTIFICAÇÃO. A surpresa importa mais que a aula.\n` +
-    `- Linguagem MUITO acessível. Sem juridiquês, sem tom professoral. EVITAR "conforme previsto", "nos termos legais", "cumpre esclarecer". PREFERIR "a maioria não sabe, mas...", "isso quase ninguém te explica", "tem condomínio errando isso".\n` +
-    `- Estrutura: primeiro mostra o problema que o morador já conhece; depois explica o que ele não sabia. Uma ideia por slide, progressão lógica, conclusão clara antes do CTA.\n` +
-    `- CTA depende do tema: muito útil → "Salva esse post"; divide opiniões → CTA binário de debate.\n` +
-    `- Sucesso: "não sabia disso", "meu condomínio faz errado", compartilhamentos, salvamentos, marcações de vizinhos.`,
-};
-
-// PASSO 0 — objetivo do carrossel (@consvictabr). Consvicta e marca
-// boutique de gestao condominial (SP & RJ, desde 2019). Publico:
-// sindico profissional / conselho / proprietario de prediol alto
-// padrao. Tom: premium, proximo, tecnico-mas-humano. Vende experiencia
-// boutique e personalizacao real. NUNCA mencionar Sindicompany ou By
-// Sindicompany — sao marcas distintas e concorrentes do ponto de
-// vista do conteudo.
-const OBJETIVO_INSTRUCOES_CONSVICTA: Record<string, string> = {
-  comentarios:
-    `OBJETIVO: GERAR COMENTÁRIOS (DEBATE QUALIFICADO).\n` +
-    `- Provoca síndicos profissionais, conselheiros e proprietários atentos a comentar com opinião. Sucesso = debate qualificado, não alcance.\n` +
-    `- CTA binário com lados defensáveis: "PERSONALIZADO ou PADRÃO", "BOUTIQUE ou PLATAFORMA", "TÉCNICO ou COMERCIAL", "TRANSPARÊNCIA ou EFICIÊNCIA", "COBRARIA ou RELEVARIA".\n` +
-    `- Temas: gestão padronizada × atendimento sob medida, balancete genérico × personalizado, plataforma × pessoa, custo barato × valor entregue, decisão rápida × decisão informada.\n` +
-    `- NUNCA polêmica vazia ou ataque pessoal. Debate é sobre PRÁTICA de mercado.`,
-  salvamentos:
-    `OBJETIVO: GERAR SALVAMENTOS (REFERÊNCIA TÉCNICA).\n` +
-    `- O post precisa ser tão útil que vire material de consulta. Sensação: "vou usar isso na próxima assembleia/decisão". Sucesso = salvamentos, envios em grupo, citação em reunião de conselho.\n` +
-    `- Linguagem técnica mas humana — sem juridiquês decorativo. Ancore: lei, artigo, número, jurisprudência, prática de mercado.\n` +
-    `- Temas: balancete vs prestação de contas, prestação personalizada × padrão, plano de contas customizado, fundo de reserva, leitura de DRE de condomínio, indicadores de gestão, sinais de gestão amadora.\n` +
-    `- CTA "Salva esse post.", "Leva pra próxima reunião do conselho.", "Manda pro síndico que cuida do seu prédio.".`,
-  clientes:
-    `OBJETIVO: ATRAIR NOVOS CONDOMÍNIOS (PREMIUM).\n` +
-    `- Quem decide trocar a administração precisa perceber que vive um problema BOUTIQUE: prédio único tratado como mais um, balancete padrão sem leitura, conselho sem interlocução técnica, decisões pelo formulário em vez de pela conversa.\n` +
-    `- Mostre o caos típico: balancete que ninguém entende, gestor que troca a cada 6 meses, prestação atrasada, conselho atropelado, plano de contas que não casa com o prédio. Resultado SEMPRE com número real: prazo, economia, redução de inadimplência, retomada de obras.\n` +
-    `- NUNCA prometa transformação digital, dashboard, tecnologia mágica. Venda: equipe especializada, atendimento próximo, balancete sob medida, plano de contas customizado, 20+ anos de mercado, gente que conhece o prédio pelo nome.\n` +
-    `- CTA elegante e seletivo: "O seu prédio merece uma administração que conhece ele pelo nome.", "Marca uma conversa.", "Talvez sua administração esteja te tratando como mais um.".`,
-  autoridade:
-    `OBJETIVO: POSICIONAR AUTORIDADE BOUTIQUE NO MERCADO.\n` +
-    `- Eleva a Consvicta como REFERÊNCIA em gestão condominial boutique de SP & RJ. Não é vender agora — é fazer o mercado pensar "essa administradora opera num outro nível". Sucesso = compartilhamentos qualificados, citação em mesa de conselho, percepção de elite.\n` +
-    `- Linguagem sofisticada, técnica, MENOS emocional. Visão de mercado, profissionalização do setor, futuro da administração condominial, gestão por dados, transparência, proximidade.\n` +
-    `- Temas: futuro da administração condominial, o erro de tratar prédio como template, por que balancete personalizado importa, o que diferencia gestão boutique de plataforma, sinais de uma administradora de elite, leitura crítica de prestação de contas.\n` +
-    `- CTA institucional: "A administração condominial mudou.", "Há gestão para gente, e gestão para template.", "Por uma administração que olha no olho.".`,
-};
-
-// PASSO 0 — objetivo do carrossel (@bysindicompany). Mesma ideia do
-// @sindicompanybr, mas o publico e o sindico PROFISSIONAL — muda
-// linguagem, dor, gatilhos, formatos, CTA e percepcao de valor. O
-// conteudo nao pode parecer perfil de condominio: parece mercado,
-// posicionamento, bastidor da sindicatura, crescimento, autoridade.
-const OBJETIVO_INSTRUCOES_BY: Record<string, string> = {
-  comentarios:
-    `OBJETIVO: GERAR COMENTÁRIOS (DEBATE ENTRE SÍNDICOS).\n` +
-    `- Provoca identificação e divisão entre síndicos profissionais. Sucesso = síndicos debatendo, marcando outros síndicos, comentários longos, identificação profissional.\n` +
-    `- O síndico precisa sentir vontade de defender sua visão de gestão. Linguagem mais madura, mais direta, mais "mercado" — sensação de "finalmente alguém falou isso".\n` +
-    `- CTA binário ou altamente posicionável: "SÍNDICO OPERACIONAL ou SÍNDICO ESTRATÉGICO", "COBRARIA ou RELEVARIA", "DEMITIRIA ou TREINARIA", "WHATSAPP AJUDA ou ATRAPALHA", "GESTÃO FIRME ou GESTÃO LEVE". Nunca CTA genérico.\n` +
-    `- Temas que funcionam: síndico que faz tudo sozinho, excesso de WhatsApp, condômino invasivo, conselho tóxico, síndico que não delega, guerra de ego entre síndicos, concorrência desleal, preço baixo no mercado, síndrome do síndico 24h, romantização da sobrecarga. NUNCA tema de "dica de condomínio" pro morador.`,
-  salvamentos:
-    `OBJETIVO: GERAR SALVAMENTOS (CRESCIMENTO PROFISSIONAL).\n` +
-    `- O post precisa AJUDAR O SÍNDICO A CRESCER PROFISSIONALMENTE. Sensação: "isso melhora minha gestão". Parece ferramenta, framework, referência, aprendizado aplicável, visão estratégica. Sucesso = salvamentos, compartilhamentos entre síndicos, reposts, encaminhamento em grupos de gestão.\n` +
-    `- Útil pra: operação, posicionamento, liderança, comunicação, vendas, gestão, organização, expansão. Muito escaneável, muito prático — o síndico aplica, adapta, salva pra rever.\n` +
-    `- Temas: como cobrar sem perder autoridade, como conduzir assembleias difíceis, erros que fazem síndicos perder condomínios, como parar de apagar incêndio, como construir marca pessoal, como precificar sindicatura, sinais de gestão desorganizada, como criar processos, como lidar com conselho hostil, o que síndicos de alto nível fazem diferente.\n` +
-    `- CTA: "Salva isso.", "Todo síndico precisa guardar esse post.", "Você vai usar isso em alguma assembleia.", "Manda pra outro síndico." Nunca CTA de debate.`,
-  clientes:
-    `OBJETIVO: ATRAIR SÍNDICOS PARA O BY SINDICOMPANY.\n` +
-    `- O síndico precisa pensar "eu não quero crescer sozinho". Atrai quem quer escala, estrutura, marca, backoffice, crescer no mercado, parar de só sobreviver. Sucesso = DMs, inscrições, leads qualificados, pedidos de reunião.\n` +
-    `- NUNCA vender como franquia. NUNCA parecer recrutamento comum. O By precisa parecer ELITE DE MERCADO, estrutura profissional, crescimento, posicionamento, fortalecimento de marca pessoal.\n` +
-    `- Mostrar: bastidores reais, estrutura, equipe, suporte, marketing, engenharia, jurídico, processos, networking, crescimento profissional, fortalecimento do nome do síndico. Contraste síndico-sozinho × síndico-com-estrutura.\n` +
-    `- Dor: síndico cansado de fazer tudo sozinho, operar sem equipe, ser refém do WhatsApp, não conseguir crescer, perder tempo operacional, não construir autoridade.\n` +
-    `- Linguagem aspiracional, estratégica, mercado premium — "é esse nível que eu quero atingir".\n` +
-    `- CTA seletivo, nunca anúncio: "Talvez o próximo passo da sua sindicatura seja esse.", "Nem todo síndico está pronto para crescer assim.", "Se você quer crescer de verdade, fala com a gente.", "O mercado mudou. E alguns síndicos cresceram junto."`,
+    `- O público-alvo precisa perceber que vive um problema que a marca resolve. Sucesso = DMs, leads, cliques no link da bio.\n` +
+    `- NUNCA venda diretamente. Mostre a dor, o "antes" e o resultado final com NÚMEROS reais (economia, prazo, redução de problema). Específico converte mais que promessa genérica.\n` +
+    `- A marca PODE aparecer mais e a assinatura pode entrar no fechamento.\n` +
+    `- CTA leve, nunca anúncio direto (ex: "A gente resolve.", "Fala com a gente.", "Link na bio.").`,
   autoridade:
     `OBJETIVO: POSICIONAR AUTORIDADE NO MERCADO.\n` +
-    `- Eleva a percepção do By Sindicompany como REFERÊNCIA em sindicatura profissional. Não é vender agora — é fazer o síndico pensar "eles estão alguns passos à frente do mercado". Sucesso = compartilhamentos entre síndicos, percepção de autoridade, convites, networking, fortalecimento da marca.\n` +
-    `- Linguagem sofisticada, estratégica, MENOS emocional, MENOS humor — visão de mercado, liderança, experiência, movimento de transformação da sindicatura.\n` +
-    `- Temas: futuro da sindicatura, profissionalização do mercado, erros estruturais do setor, gestão orientada por dados, construção de marca, crescimento sustentável, síndico como empresário, liderança, posicionamento, mercado premium, comportamento do novo morador.\n` +
-    `- CTA institucional e elegante: "O mercado mudou.", "A sindicatura está evoluindo.", "Os síndicos que entenderem isso primeiro sairão na frente.", "Por mais síndicos preparados."\n` +
-    `- Formatos fortes aqui: Manifesto, tendência de mercado, dado que choca, visão estratégica, carta aberta, reflexão profissional.`,
+    `- Eleva a marca como REFERÊNCIA no seu nicho. Não é vender agora — é fazer o mercado perceber que a marca opera num outro nível. Sucesso = compartilhamentos qualificados, percepção de elite.\n` +
+    `- Linguagem sofisticada, estratégica, menos emocional. Visão de mercado, tendência, profissionalização do setor.\n` +
+    `- CTA institucional e elegante (ex: "O mercado mudou.", "Os que entenderem isso primeiro saem na frente.").\n` +
+    `- Formatos fortes aqui: Manifesto, tendência, dado que choca, visão estratégica.`,
+  educar:
+    `OBJETIVO: EDUCAR O PÚBLICO.\n` +
+    `- Ensinar algo que o público não sabe mas deveria. Gatilho: SURPRESA + IDENTIFICAÇÃO. A surpresa importa mais que a aula.\n` +
+    `- Linguagem MUITO acessível. Sem juridiquês, sem tom professoral. Preferir "a maioria não sabe, mas...", "isso quase ninguém te explica".\n` +
+    `- Estrutura: primeiro o problema que o público já conhece; depois o que ele não sabia. Uma ideia por slide.\n` +
+    `- CTA depende do tema: muito útil → "Salva esse post"; divide opiniões → CTA binário.`,
 };
 
 /** Gera 3 versões de copy pra carrossel — angulos editoriais distintos.
@@ -368,95 +231,46 @@ export async function gerarTresCopies(input: {
   n_slides: number;
   briefing?: string;
 }): Promise<{ ok: true; copies: CarrosselCopy[] } | { ok: false; error: string }> {
-  const brand =
-    input.brand === "bysindicompany"
-      ? "bysindicompany"
-      : input.brand === "consvictabr"
-        ? "consvictabr"
-        : "sindicompanybr";
-  const isBy = brand === "bysindicompany";
-  const isConsvicta = brand === "consvictabr";
-  const objMap = isConsvicta
-    ? OBJETIVO_INSTRUCOES_CONSVICTA
-    : isBy
-      ? OBJETIVO_INSTRUCOES_BY
-      : OBJETIVO_INSTRUCOES;
+  const brand = input.brand || "sindicompanybr";
+  // Persona, handle e assinatura vem da tabela marcas. A persona (guia
+  // da marca) e o system prompt — carrega TODA a voz/estrategia/contexto;
+  // os blocos hardcoded por marca foram aposentados em favor dela.
+  const marca = await getMarca(brand);
+  const systemPrompt = marca?.persona || SYSTEM_FALLBACK;
+  const handle = marca?.handle || `@${brand}`;
+  const assinatura = marca?.assinatura || "";
+
   const objetivoBloco =
-    input.objetivo && objMap[input.objetivo]
-      ? `\n${objMap[input.objetivo]}\n`
+    input.objetivo && OBJETIVO_INSTRUCOES[input.objetivo]
+      ? `\n${OBJETIVO_INSTRUCOES[input.objetivo]}\n`
       : "";
   const formato_label = input.formato.replaceAll("_", " ");
   const instrucoesFormato =
     FORMATO_INSTRUCOES[input.formato] ??
-    `FORMATO: ${formato_label} (estrutura livre, mantendo a voz e os 7 passos).`;
+    `FORMATO: ${formato_label} (estrutura livre, mantendo a voz da marca).`;
 
-  const assinatura = isConsvicta
-    ? "Consvicta. Administração condominial que entrega resultado."
-    : isBy
-      ? "By Sindicompany. Sindicatura no próximo nível."
-      : "Por mais lares. 🏡";
-
-  const handle = isConsvicta
-    ? "@consvictabr"
-    : isBy
-      ? "@bysindicompany"
-      : "@sindicompanybr";
-
-  const blocoEstrategia = isConsvicta
-    ? `ESTRATÉGIA @consvictabr:\n` +
-      `- PÚBLICO: síndico profissional, conselho consultivo, proprietário atento, tomador de decisão de prédio premium em SP & RJ. NUNCA o morador comum.\n` +
-      `- OBJETIVO DA MARCA: posicionar a Consvicta como administradora BOUTIQUE — equipe especializada que conhece cada prédio de perto. NÃO é plataforma de gestão.\n` +
-      `- TOM: premium, próximo, técnico mas humano. Confiante sem ser arrogante. Frases curtas e diretas. Sem cliché motivacional, sem corporativo vazio.\n` +
-      `- VENDE: experiência (20+ anos), atendimento boutique, balancete personalizado, plano de contas customizado, proximidade, decisão informada, prédio tratado como único.\n` +
-      `- NÃO VENDE: dashboard, plataforma, transformação digital, escala, tecnologia genérica.\n`
-    : isBy
-      ? `ESTRATÉGIA @bysindicompany:\n` +
-        `- PÚBLICO: síndico profissional / aspirante / em crescimento / parceiro estratégico. NUNCA o morador.\n` +
-        `- OBJETIVO DA MARCA: atrair síndicos, gerar pertencimento, fortalecer a marca pessoal do síndico, mostrar estrutura/suporte, elevar o nível da sindicatura.\n` +
-        `- TOM: aspiracional, provocativo, estratégico, empresarial. Mentor que já chegou. NUNCA guru motivacional vazio.\n`
-      : `ESTRATÉGIA @sindicompanybr:\n` +
-        `- PÚBLICO: o MORADOR comum do condomínio. NUNCA o síndico.\n` +
-        `- OBJETIVO: educar, desmistificar, virar referência que se salva e se compartilha.\n` +
-        `- TOM: pessoa inteligente corrigindo um amigo. Direto, sem rodeio.\n`;
-
-  const blocoContexto = isConsvicta
-    ? `- Contexto: gestão condominial BOUTIQUE — administradora que conhece o prédio pelo nome. Quando falar de condomínio, é pelo ângulo de DECISÃO, GOVERNANÇA, PRESTAÇÃO DE CONTAS, RELAÇÃO conselho × administradora. Pelo menos UM slide menciona "condomínio", "administração condominial" ou "gestão" literal.\n`
-    : isBy
-      ? `- Contexto: bastidores e realidade da SINDICATURA PROFISSIONAL — gestão, liderança, mercado, carreira, estrutura. Quando falar de condomínio, é pelo ângulo de quem GERE, não de quem mora. Pelo menos UM slide menciona "síndico"/"sindicatura"/"gestão" literal.\n`
-      : `- Contexto condominial sempre: assembleia, taxa, síndico, morador, área comum, regulamento, convivência, fachada, manutenção. Pelo menos UM slide menciona "condomínio" ou "condominial" literal.\n`;
-
-  const angulos = isConsvicta
-    ? [
-        "Recorte: o erro de tratar prédio como template (gestão padronizada × boutique).",
-        "Recorte: governança e transparência (balancete personalizado, plano de contas sob medida, leitura crítica de prestação de contas).",
-        "Recorte: experiência e proximidade (20+ anos, equipe que conhece o condomínio pelo nome, decisão informada do conselho).",
-      ]
-    : isBy
-      ? [
-          "Recorte: dor / solidão / desafio do síndico (o que ninguém fala).",
-          "Recorte: crescimento / posicionamento / autoridade (como subir de nível).",
-          "Recorte: rede / estrutura / pertencimento (não estar sozinho, ter suporte).",
-        ]
-      : [
-          "Recorte: morador comum (apartamento, garagem, elevador, convivência doméstica).",
-          "Recorte: governança/financeiro (assembleia, taxa, prestação de contas, fundo de reserva).",
-          "Recorte: o que o morador espera do síndico/gestão.",
-        ];
-
-  const listaNegraExtra = isBy
-    ? ", o sucesso é uma jornada, acredite no seu potencial, saia da zona de conforto, mindset vencedor"
-    : isConsvicta
-      ? ", transformação digital, soluções integradas, atendimento acolhedor, escala, plataforma de gestão"
+  // anti-leak generico: nao citar nenhuma OUTRA marca cadastrada (nome
+  // ou handle). Substitui a regra antes hardcoded so pra Consvicta.
+  const concorrentes = (await listMarcas({ ativo: true }))
+    .filter((m) => m.slug !== brand)
+    .flatMap((m) => [m.nome, m.handle])
+    .filter(Boolean);
+  const antiLeak =
+    concorrentes.length > 0
+      ? `- PROIBIDO mencionar outras marcas/concorrentes (${concorrentes.join(", ")}) nos slides ou na legenda. Só ${marca?.nome ?? handle} aparece, e a única assinatura é "${assinatura}".\n`
       : "";
 
-  const antiLeak = isConsvicta
-    ? `- PROIBIDO mencionar "Sindicompany", "By Sindicompany", "@sindicompanybr", "@bysindicompany" ou qualquer outra administradora/marca além da Consvicta. Concorrentes NUNCA aparecem nos slides nem na legenda.\n` +
-      `- PROIBIDO usar a tagline "Por mais lares" — essa NÃO é a tagline da Consvicta. A tagline correta é "Administração condominial que entrega resultado." e só aparece na legenda.\n`
-    : "";
+  // 3 angulos editoriais GENERICOS pras 3 versoes — a persona refina o
+  // tom de cada um conforme a marca.
+  const angulos = [
+    "Recorte 1: o ângulo mais humano/emocional do tema — identificação, dor real, bastidor.",
+    "Recorte 2: o ângulo de processo/governança/dados — o lado técnico e organizacional.",
+    "Recorte 3: o ângulo da transformação — o que muda quando a gestão é profissional.",
+  ];
 
   const buildPrompt = (angulo: string): string =>
-    `Crie UMA versão de copy pra um carrossel do ${handle}.\n\n` +
-    `${blocoEstrategia}` +
+    `Crie UMA versão de copy pra um carrossel do ${handle}.\n` +
+    `A VOZ, o público, o tom e o que pode/não pode estão no system prompt (a persona da marca) — SIGA À RISCA.\n` +
     objetivoBloco +
     `\nBRIEFING:\n` +
     `- Título interno: ${input.titulo}\n` +
@@ -469,16 +283,16 @@ export async function gerarTresCopies(input: {
     (objetivoBloco
       ? `IMPORTANTE: o OBJETIVO acima é a intenção PRINCIPAL — quando objetivo e formato divergirem, o objetivo manda (CTA, tom, estrutura).\n\n`
       : "") +
-    `VOZ: CENA concreta (começa no meio) → SUPOSIÇÃO do leitor (termina com "né?"/"certo?") → CONTRADIÇÃO em ≤3 palavras → EXPLICAÇÃO uma ideia por frase → FECHAMENTO paradoxal/quotável → CTA. A ASSINATURA "${assinatura}" aparece SÓ na legenda, nunca nos slides. Use a estrutura de slides do FORMATO.\n\n` +
+    `VOZ: siga a persona da marca (system prompt) — tom, público, o que viraliza, o que nunca fazer. A ASSINATURA "${assinatura}" aparece SÓ na legenda, nunca nos slides.\n` +
+    `ESTRUTURA: use o FORMATO acima e EXATAMENTE ${input.n_slides} slides. Se a persona sugerir outra contagem/estrutura, o FORMATO e a quantidade de slides deste post MANDAM.\n\n` +
     `REGRAS:\n` +
     `- Capa: o tema "${input.tema}" aparece literal ou em paráfrase clara. Capa inteira (titulo + body) tem no máximo 20 palavras.\n` +
     `- Cada slide interno: tipo + título (3-7 palavras) + body (1-3 frases curtas, máx 35 palavras). Seja conciso — não encha linguiça.\n` +
     `- Em posts educativos (mito, dado, tutorial, lista jurídica): pelo menos UMA âncora — artigo (ex: "Código Civil, art. 1.336"), decisão judicial (ex: "STJ, REsp 1.699.022/SP, 2019") OU dado com fonte nomeada e datada.\n` +
-    blocoContexto +
     antiLeak +
-    `- LEGENDA Instagram: 4-8 linhas, hook na primeira, termina OBRIGATORIAMENTE com "${assinatura}" e EXATAMENTE 3 hashtags na linha seguinte${isConsvicta ? ' (use #consvicta + 2 hashtags do tema — JAMAIS #sindicompany ou #bysindicompany)' : ""}.\n` +
+    `- LEGENDA Instagram: 4-8 linhas, hook na primeira, termina OBRIGATORIAMENTE com "${assinatura}" e EXATAMENTE 3 hashtags na linha seguinte (uma da marca + 2 do tema).\n` +
     `- Acentos corretos em TODA palavra (você, síndico, condomínio, gestão). NUNCA: gerúndio, travessão (—), aspas curvas, emoji decorativo no slide, frases de introdução ("é importante ressaltar").\n` +
-    `- LISTA NEGRA: papel fundamental, momento crucial, cenário em constante evolução, destacando a importância, o futuro é promissor, juntos somos mais fortes, destaca-se, vibrante, no coração de, em meio a, reflete a, simboliza a, evidencia a, desafios e oportunidades, rica diversidade, não apenas X mas também Y, mergulhando em, celebrando a, fomentando o, estudos mostram, especialistas afirmam${listaNegraExtra}.\n\n` +
+    `- LISTA NEGRA: papel fundamental, momento crucial, cenário em constante evolução, destacando a importância, o futuro é promissor, juntos somos mais fortes, destaca-se, vibrante, no coração de, em meio a, reflete a, simboliza a, evidencia a, desafios e oportunidades, rica diversidade, não apenas X mas também Y, mergulhando em, celebrando a, fomentando o, estudos mostram, especialistas afirmam.\n\n` +
     `Devolva JSON estrito (sem markdown):\n` +
     `{ "slides": [{"tipo":"capa","titulo":"...","body":"..."}, ... total ${input.n_slides} slides], "legenda":"..." }`;
 
@@ -488,7 +302,7 @@ export async function gerarTresCopies(input: {
   // estourava o tempo limite com o prompt grande.
   let results: ({ ok: true; content: string } | { ok: false; error: string })[];
   try {
-    results = await Promise.all(angulos.map((a) => chat(buildPrompt(a), brand)));
+    results = await Promise.all(angulos.map((a) => chat(buildPrompt(a), systemPrompt)));
   } catch (e) {
     return {
       ok: false,
@@ -557,7 +371,7 @@ export async function traduzirDescricaoUsuario(
     `- Output JSON: {"desc_en": "..."}\n\n` +
     `INPUT:\n${descPt}`;
 
-  const r = await chat(prompt);
+  const r = await chat(prompt, TRANSLATOR_SYSTEM);
   if (!r.ok) return { ok: false, error: r.error };
   let parsed: { desc_en?: string };
   try {
@@ -598,7 +412,7 @@ export async function descreverCenaParaCapa(input: {
     `Capa título: ${input.tituloCapa}\n` +
     `Capa subtítulo: ${input.subtitulo || "—"}`;
 
-  const r = await chat(prompt);
+  const r = await chat(prompt, TRANSLATOR_SYSTEM);
   if (!r.ok) return { ok: false, error: r.error };
   let parsed: { scene_en?: string };
   try {
