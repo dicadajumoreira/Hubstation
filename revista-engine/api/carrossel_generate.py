@@ -27,6 +27,7 @@ import re
 import sys
 import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -44,10 +45,17 @@ _BRAND = "sindicompanybr"
 # (legado) ou a capa classica se a env nao estiver setada.
 _COVER_ARCHETYPE = ""
 
-# Paleta da marca atual, vinda da tabela `marcas` (coluna paleta jsonb).
-# Setada em gerar_carrossel() a partir do slug. None = sem override no DB,
-# entao _palette() cai nos valores chumbados (PALETTE / PALETTE_CONSVICTA).
+# Identidade da marca atual, vinda da tabela `marcas`. Setadas em
+# gerar_carrossel() a partir do slug. Para as 3 marcas chumbadas
+# (sindicompanybr/bysindicompany/consvictabr) prefixo e handle continuam
+# vindo das funcoes hardcoded; estes globais so sao usados por MARCA NOVA.
 _BRAND_PALETTE: dict[str, str] | None = None
+_BRAND_PREFIX = ""  # bucket_prefix do DB (ex: __minhamarca-)
+_BRAND_HANDLE = ""  # handle do DB (ex: @minhamarca)
+# Tipografia data-driven da marca (coluna marcas.tipografia). Só usada por
+# marca nova — as 3 chumbadas seguem com as fontes embutidas. Shape:
+# {"display","body","numeric","faces":[{family,weight,style,file}, ...]}
+_BRAND_TIPOGRAFIA: dict[str, Any] | None = None
 
 
 def _asset_prefix() -> str:
@@ -59,7 +67,11 @@ def _asset_prefix() -> str:
         return "__by-"
     if _BRAND == "consvictabr":
         return "__consvicta-"
-    return "__"
+    if _BRAND == "sindicompanybr":
+        return "__"
+    # Marca nova: prefixo do cadastro (tabela marcas). Fallback defensivo
+    # __<slug>- igual ao default que o cadastro grava.
+    return _BRAND_PREFIX or f"__{_BRAND}-"
 
 
 def _handle() -> str:
@@ -67,7 +79,9 @@ def _handle() -> str:
         return "@bysindicompany"
     if _BRAND == "consvictabr":
         return "@consvictabr"
-    return "@sindicompanybr"
+    if _BRAND == "sindicompanybr":
+        return "@sindicompanybr"
+    return _BRAND_HANDLE or f"@{_BRAND}"
 
 
 _PATTERNS_CACHE: list[str] | None = None  # data URLs prontos pra uso
@@ -501,6 +515,102 @@ def _sindicompany_fonts_css() -> str:
     return _SINDICOMPANY_FONTS_CSS_CACHE
 
 
+_BRAND_FONTS_CACHE: dict[str, tuple[str, str, str, str] | None] = {}
+
+
+def _font_format(file: str) -> str:
+    f = file.lower()
+    if f.endswith(".woff2"):
+        return "woff2"
+    if f.endswith(".woff"):
+        return "woff"
+    if f.endswith(".otf"):
+        return "opentype"
+    return "truetype"
+
+
+def _font_mime(file: str) -> str:
+    f = file.lower()
+    if f.endswith(".woff2"):
+        return "font/woff2"
+    if f.endswith(".woff"):
+        return "font/woff"
+    if f.endswith(".otf"):
+        return "font/otf"
+    return "font/ttf"
+
+
+def _brand_fonts_from_tipografia() -> tuple[str, str, str, str] | None:
+    """Monta (head_fonts, font_display, font_body, font_numeric) a partir da
+    tipografia data-driven (_BRAND_TIPOGRAFIA), baixando cada arquivo de fonte
+    do bucket ({prefixo}fonts/) e embutindo em base64 como @font-face. Devolve
+    None se nao houver tipografia utilizavel ou se nenhum arquivo carregar —
+    aí o caller cai nas fontes embutidas. Cache por marca/processo."""
+    if _BRAND in _BRAND_FONTS_CACHE:
+        return _BRAND_FONTS_CACHE[_BRAND]
+
+    tip = _BRAND_TIPOGRAFIA
+    faces = tip.get("faces") if isinstance(tip, dict) else None
+    base = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    if not isinstance(faces, list) or not faces or not base:
+        _BRAND_FONTS_CACHE[_BRAND] = None
+        return None
+
+    prefix = _asset_prefix()
+    blocks: list[str] = []
+    for f in faces:
+        if not isinstance(f, dict):
+            continue
+        file = str(f.get("file") or "").strip()
+        family = str(f.get("family") or "").strip()
+        if not file or not family:
+            continue
+        weight = f.get("weight") or 400
+        style = f.get("style") or "normal"
+        url = (
+            f"{base}/storage/v1/object/public/"
+            f"condominios-fotos/{prefix}fonts/{urllib.parse.quote(file)}"
+        )
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "carrossel-engine/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                if resp.status != 200:
+                    continue
+                content = resp.read()
+            b64 = base64.b64encode(content).decode("ascii")
+            blocks.append(
+                "@font-face{"
+                f"font-family:'{family}';"
+                f"font-style:{style};"
+                f"font-weight:{weight};"
+                "font-display:swap;"
+                f"src:url(data:{_font_mime(file)};base64,{b64}) "
+                f"format('{_font_format(file)}');"
+                "}"
+            )
+            print(
+                f"[carrossel] fonte {file} embutida ({len(content)//1024} KB)",
+                flush=True,
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[carrossel] fonte {file} falhou: {e}", flush=True)
+            continue
+
+    if not blocks:
+        _BRAND_FONTS_CACHE[_BRAND] = None
+        return None
+
+    head = f"<style>{''.join(blocks)}</style>"
+    fd = str(tip.get("display") or "").strip() or "system-ui, sans-serif"
+    fb = str(tip.get("body") or "").strip() or "system-ui, sans-serif"
+    fn = str(tip.get("numeric") or "").strip() or fb
+    result = (head, fd, fb, fn)
+    _BRAND_FONTS_CACHE[_BRAND] = result
+    return result
+
+
 def _logo_slot_data_url(slot: int) -> str:
     """Devolve data URL do logo em __logos/logo-{slot}.X. Cache por
     slot. String vazia se nao houver."""
@@ -835,15 +945,50 @@ def _palette() -> dict[str, str]:
     return base
 
 
-def _fetch_marca_paleta(slug: str) -> dict[str, str] | None:
-    """Le marcas.paleta do Supabase. Qualquer falha (coluna ainda nao
-    criada, marca sem paleta, erro de rede) cai em None -> usa os valores
-    chumbados. Mantem zero regressao independente do estado do banco."""
+def _fetch_marca(slug: str) -> dict[str, Any] | None:
+    """Le a marca do Supabase (paleta, bucket_prefix, handle) numa query.
+    Qualquer falha (marca ausente, erro de rede) cai em None -> identidade
+    chumbada. Mantem zero regressao independente do estado do banco."""
     try:
         sb = _sb_client()
         res = (
             sb.table("marcas")
-            .select("paleta")
+            .select("paleta, bucket_prefix, handle")
+            .eq("slug", slug)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        return rows[0] if rows else None
+    except Exception as e:  # noqa: BLE001 — fallback proposital
+        print(f"[carrossel] marca do DB indisponivel ({e}); usando chumbada", flush=True)
+        return None
+
+
+def _paleta_from_marca(marca: dict[str, Any] | None) -> dict[str, str] | None:
+    """Extrai a paleta (str->str) da marca, descartando lixo. None se vazia."""
+    if not marca:
+        return None
+    paleta = marca.get("paleta")
+    if isinstance(paleta, dict) and paleta:
+        return {
+            str(k): str(v)
+            for k, v in paleta.items()
+            if isinstance(v, str) and v.strip()
+        }
+    return None
+
+
+def _fetch_marca_tipografia(slug: str) -> dict[str, Any] | None:
+    """Le marcas.tipografia (jsonb). Query SEPARADA de _fetch_marca de
+    proposito: se a coluna ainda nao existir (migration nao rodada), so a
+    tipografia fica indisponivel — paleta/prefixo/handle seguem normais.
+    None = sem fontes proprias -> engine usa as embutidas."""
+    try:
+        sb = _sb_client()
+        res = (
+            sb.table("marcas")
+            .select("tipografia")
             .eq("slug", slug)
             .limit(1)
             .execute()
@@ -851,17 +996,12 @@ def _fetch_marca_paleta(slug: str) -> dict[str, str] | None:
         rows = res.data or []
         if not rows:
             return None
-        paleta = rows[0].get("paleta")
-        if isinstance(paleta, dict) and paleta:
-            # so chaves str->str (descarta lixo)
-            return {
-                str(k): str(v)
-                for k, v in paleta.items()
-                if isinstance(v, str) and v.strip()
-            }
+        tip = rows[0].get("tipografia")
+        if isinstance(tip, dict) and tip.get("faces"):
+            return tip
         return None
     except Exception as e:  # noqa: BLE001 — fallback proposital
-        print(f"[carrossel] paleta do DB indisponivel ({e}); usando chumbada", flush=True)
+        print(f"[carrossel] tipografia do DB indisponivel ({e})", flush=True)
         return None
 
 
@@ -6433,7 +6573,13 @@ def _slide_html(
     # usam Provicali (wordmark) + Epilogue (display/body/numeric)
     # tambem embutidas via base64 do Brand Hub 2026-05-17. Sem
     # dependencia de Google Fonts no render.
-    if is_consvicta:
+    # Marca nova com tipografia propria (zip de fontes importado): embute as
+    # fontes do bucket. Se nao houver/falhar, cai no caminho embutido padrao.
+    # Para as 3 marcas chumbadas _BRAND_TIPOGRAFIA e None -> brand_fonts None.
+    brand_fonts = _brand_fonts_from_tipografia()
+    if brand_fonts:
+        head_fonts, font_display, font_body, font_numeric = brand_fonts
+    elif is_consvicta:
         head_fonts = f"<style>{_consvicta_fonts_css()}</style>"
         font_display = "'Cormorant Garamond', Georgia, serif"
         font_body = "'Outfit', system-ui, sans-serif"
@@ -7570,7 +7716,8 @@ def _humanizer_pass(
 
 def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
-    global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE
+    global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE, _BRAND_PREFIX, _BRAND_HANDLE
+    global _BRAND_TIPOGRAFIA
     print(f"[carrossel] iniciando geração de {carrossel_id}", flush=True)
     try:
         carrossel = _fetch_carrossel(carrossel_id)
@@ -7580,22 +7727,37 @@ def gerar_carrossel(carrossel_id: str) -> int:
 
         # Define a marca ANTES de qualquer lookup de asset (buckets,
         # handle, logo). Default sindicompanybr pra registros legacy.
+        # Mantem o slug REAL da marca (marca nova inclusive). Sanitiza pra
+        # [a-z0-9-] porque o slug vira parte de URL de storage. Vazio ->
+        # default sindicompanybr (registros legacy).
         b = (carrossel.get("brand") or "sindicompanybr").strip().lower()
-        if b == "bysindicompany":
-            _BRAND = "bysindicompany"
-        elif b == "consvictabr":
-            _BRAND = "consvictabr"
-        else:
-            _BRAND = "sindicompanybr"
+        _BRAND = re.sub(r"[^a-z0-9-]", "", b) or "sindicompanybr"
         print(f"[carrossel] brand={_BRAND}", flush=True)
 
-        # Paleta data-driven: le marcas.paleta do DB. None = usa a chumbada.
-        _BRAND_PALETTE = _fetch_marca_paleta(_BRAND)
+        # Identidade data-driven (tabela marcas): paleta + prefixo de bucket
+        # + handle. Para as 3 marcas chumbadas prefixo/handle continuam vindo
+        # das funcoes hardcoded; estes valores so sao usados por marca nova.
+        _marca = _fetch_marca(_BRAND)
+        _BRAND_PALETTE = _paleta_from_marca(_marca)
+        _BRAND_PREFIX = (_marca or {}).get("bucket_prefix") or ""
+        _BRAND_HANDLE = (_marca or {}).get("handle") or ""
         if _BRAND_PALETTE:
             print(
                 f"[carrossel] paleta do DB ({len(_BRAND_PALETTE)} cores)",
                 flush=True,
             )
+
+        # Tipografia data-driven só pra marca nova; as 3 chumbadas seguem
+        # com as fontes embutidas. Query separada (vide _fetch_marca_tipografia).
+        _BRAND_TIPOGRAFIA = None
+        if _BRAND not in ("sindicompanybr", "bysindicompany", "consvictabr"):
+            _BRAND_TIPOGRAFIA = _fetch_marca_tipografia(_BRAND)
+            if _BRAND_TIPOGRAFIA:
+                _faces = _BRAND_TIPOGRAFIA.get("faces") or []
+                print(
+                    f"[carrossel] tipografia do DB ({len(_faces)} faces)",
+                    flush=True,
+                )
 
         # Brand Hub 2026-05-17: prefere o arquetipo escolhido pela
         # editora no /carrossel/novo (coluna cover_archetype). Cai pra

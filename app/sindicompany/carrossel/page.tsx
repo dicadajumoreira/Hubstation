@@ -6,6 +6,7 @@ import {
   listCarrosseis,
   type Carrossel,
 } from "@/lib/sindicompany/carrosseis";
+import { listMarcas } from "@/lib/sindicompany/marcas-db";
 import { DashboardShell } from "../shell";
 import { CarrosselRowActions } from "./row-actions";
 
@@ -47,6 +48,15 @@ export default async function CarrosseisPage() {
   } catch (e) {
     dbError =
       "Tabela 'carrosseis' não existe ainda. Rode a migration 20260520_carrosseis.sql no Supabase.";
+  }
+
+  // Mapa slug -> handle pra rotular a marca (inclui marcas novas, nao so
+  // as 3 chumbadas). Falha silenciosa: cai no proprio slug.
+  const handlePorMarca = new Map<string, string>();
+  try {
+    for (const m of await listMarcas()) handlePorMarca.set(m.slug, m.handle);
+  } catch {
+    // sem marcas -> usa o slug como rotulo
   }
 
   return (
@@ -137,11 +147,8 @@ export default async function CarrosseisPage() {
                   >
                     <td className="px-5 py-3">
                       <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-onix-100 text-onix-800">
-                        {c.brand === "bysindicompany"
-                          ? "@bysindicompany"
-                          : c.brand === "consvictabr"
-                            ? "@consvictabr"
-                            : "@sindicompanybr"}
+                        {handlePorMarca.get(c.brand ?? "") ??
+                          `@${c.brand ?? "sindicompanybr"}`}
                       </span>
                     </td>
                     <td className="px-5 py-3">
