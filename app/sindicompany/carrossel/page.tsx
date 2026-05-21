@@ -7,6 +7,7 @@ import {
   type Carrossel,
 } from "@/lib/sindicompany/carrosseis";
 import { listMarcas } from "@/lib/sindicompany/marcas-db";
+import { describeError } from "@/lib/sindicompany/errors";
 import { DashboardShell } from "../shell";
 import { CarrosselRowActions } from "./row-actions";
 
@@ -48,8 +49,11 @@ export default async function CarrosseisPage() {
   } catch (e) {
     // Mostra a causa REAL (antes era um texto fixo de "rode a migration"
     // que mascarava erro de conexão, projeto pausado, RLS, etc.).
-    const msg = e instanceof Error ? e.message : String(e);
-    dbError = `Não consegui carregar os carrosséis: ${msg}`;
+    const code =
+      e && typeof e === "object" && "code" in e
+        ? ` [${(e as { code?: string }).code}]`
+        : "";
+    dbError = `Não consegui carregar os carrosséis: ${describeError(e)}${code}`;
   }
 
   // Mapa slug -> handle pra rotular a marca (inclui marcas novas, nao so
