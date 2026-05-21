@@ -4,7 +4,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/sindicompany/auth";
-import { createMarca, updateMarca } from "@/lib/sindicompany/marcas-db";
+import {
+  createMarca,
+  updateMarca,
+  type MarcaTipografia,
+} from "@/lib/sindicompany/marcas-db";
+import { processFontZip } from "@/lib/sindicompany/marca-fonts";
 
 async function requireAuth() {
   const store = await cookies();
@@ -40,6 +45,24 @@ function paletaFromForm(fd: FormData): Record<string, string> | null {
   return Object.keys(out).length ? out : null;
 }
 
+// Le o ZIP de fontes (campo fontes_zip) + os nomes de familia e devolve a
+// tipografia pronta. undefined = nenhum zip enviado (nao mexe na tipografia
+// existente). Lanca Error amigavel em caso de problema no zip.
+async function tipografiaFromForm(
+  fd: FormData,
+  bucketPrefix: string,
+): Promise<MarcaTipografia | undefined> {
+  const file = fd.get("fontes_zip");
+  if (!(file instanceof File) || file.size === 0) return undefined;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const { tipografia } = await processFontZip(bytes, bucketPrefix, {
+    display: s(fd, "fonte_display"),
+    body: s(fd, "fonte_body"),
+    numeric: s(fd, "fonte_numeric"),
+  });
+  return tipografia;
+}
+
 // slug url-safe: minusculas, sem acento, so [a-z0-9-]
 function normalizeSlug(raw: string): string {
   return raw
@@ -67,6 +90,7 @@ export async function criarMarcaAction(formData: FormData): Promise<void> {
   const ordemRaw = parseInt(s(formData, "ordem"), 10);
 
   try {
+    const tipografia = await tipografiaFromForm(formData, bucketPrefix);
     await createMarca({
       slug,
       nome,
@@ -80,6 +104,7 @@ export async function criarMarcaAction(formData: FormData): Promise<void> {
       assinatura: s(formData, "assinatura") || null,
       temasSugeridos: lines(formData, "temas"),
       paleta: paletaFromForm(formData),
+      tipografia: tipografia ?? null,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha ao criar marca.";
@@ -101,8 +126,11 @@ export async function atualizarMarcaAction(formData: FormData): Promise<void> {
     redirect(`${back}?error=${encodeURIComponent("Nome e handle são obrigatórios.")}`);
   }
   const ordemRaw = parseInt(s(formData, "ordem"), 10);
+  const prefix = s(formData, "bucket_prefix") || `__${slug}-`;
 
   try {
+    // So mexe na tipografia se um novo zip foi enviado; senao mantem a atual.
+    const tipografia = await tipografiaFromForm(formData, prefix);
     await updateMarca(slug, {
       nome,
       handle,
@@ -115,6 +143,7 @@ export async function atualizarMarcaAction(formData: FormData): Promise<void> {
       assinatura: s(formData, "assinatura") || null,
       temasSugeridos: lines(formData, "temas"),
       paleta: paletaFromForm(formData),
+      ...(tipografia ? { tipografia } : {}),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha ao salvar.";

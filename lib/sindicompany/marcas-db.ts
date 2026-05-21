@@ -7,6 +7,25 @@ export type MarcaSlug = string;
 
 const TABLE = "marcas";
 
+/** Um arquivo de fonte registrado (vira um @font-face no engine). */
+export interface MarcaFontFace {
+  family: string;
+  /** Peso CSS: número (400, 700) ou range de fonte variável ("100 900"). */
+  weight: number | string;
+  style: "normal" | "italic";
+  /** Nome do arquivo dentro de {bucketPrefix}fonts/ no bucket. */
+  file: string;
+}
+
+/** Tipografia data-driven da marca. As fontes (faces) sao importadas via
+ *  ZIP no cadastro; display/body/numeric sao os stacks CSS aplicados. */
+export interface MarcaTipografia {
+  display: string;
+  body: string;
+  numeric: string;
+  faces: MarcaFontFace[];
+}
+
 export interface Marca {
   id: string;
   slug: string;
@@ -28,6 +47,8 @@ export interface Marca {
   /** Cores da marca (chaves: onix, mint, sand, lavender, purple, white,
    *  gray_5 — mesmas que o template do engine usa). null = usa o tema base. */
   paleta: Record<string, string> | null;
+  /** Fontes da marca. null = usa as fontes embutidas do engine. */
+  tipografia: MarcaTipografia | null;
 }
 
 interface MarcaRow {
@@ -44,6 +65,7 @@ interface MarcaRow {
   assinatura: string | null;
   temas_sugeridos: string[] | null;
   paleta: Record<string, string> | null;
+  tipografia: MarcaTipografia | null;
 }
 
 function fromRow(r: MarcaRow): Marca {
@@ -61,6 +83,7 @@ function fromRow(r: MarcaRow): Marca {
     assinatura: r.assinatura,
     temasSugeridos: r.temas_sugeridos,
     paleta: r.paleta,
+    tipografia: r.tipografia,
   };
 }
 
@@ -97,6 +120,7 @@ export interface MarcaInput {
   assinatura?: string | null;
   temasSugeridos?: string[] | null;
   paleta?: Record<string, string> | null;
+  tipografia?: MarcaTipografia | null;
 }
 
 export async function createMarca(input: MarcaInput): Promise<Marca> {
@@ -116,6 +140,7 @@ export async function createMarca(input: MarcaInput): Promise<Marca> {
       assinatura: input.assinatura ?? null,
       temas_sugeridos: input.temasSugeridos ?? null,
       paleta: input.paleta ?? null,
+      tipografia: input.tipografia ?? null,
     })
     .select()
     .single();
@@ -142,6 +167,7 @@ export async function updateMarca(
   if (patch.assinatura !== undefined) row.assinatura = patch.assinatura;
   if (patch.temasSugeridos !== undefined) row.temas_sugeridos = patch.temasSugeridos;
   if (patch.paleta !== undefined) row.paleta = patch.paleta;
+  if (patch.tipografia !== undefined) row.tipografia = patch.tipografia;
   const { error } = await supabase.from(TABLE).update(row).eq("slug", slug);
   if (error) throw new Error(error.message);
 }

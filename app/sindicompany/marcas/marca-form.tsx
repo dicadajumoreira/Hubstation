@@ -15,6 +15,14 @@ const PALETA_BASE: Record<string, string> = {
   gray_5: "#faf7f2",
 };
 
+// Extrai o nome da familia de um stack CSS ("'Playfair', Georgia, serif"
+// -> "Playfair") pra preencher o input na edicao.
+function familyName(stack: string | undefined): string {
+  if (!stack) return "";
+  const m = stack.match(/^\s*'([^']+)'|^\s*"([^"]+)"|^\s*([^,]+)/);
+  return (m?.[1] || m?.[2] || m?.[3] || "").trim();
+}
+
 const PALETA_CAMPOS: { key: string; label: string; papel: string }[] = [
   { key: "onix", label: "Onix / Navy", papel: "texto e fundos escuros" },
   { key: "mint", label: "Acento", papel: "destaque, confiança" },
@@ -213,6 +221,66 @@ export function MarcaForm({
               />
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <label className="block text-sm font-medium text-onix-900">
+            Tipografia (fontes da marca)
+          </label>
+          <p className="text-xs text-g60">
+            Envie um <strong>.zip</strong> com os arquivos <code>.otf</code>/
+            <code>.ttf</code>/<code>.woff</code>/<code>.woff2</code> da marca e
+            diga qual família é o título, o corpo e os números. Os nomes dos
+            arquivos devem começar com o nome da família e indicar o peso/estilo
+            (ex: <code>Playfair-Bold.woff2</code>, <code>Inter-Regular.woff2</code>).
+            As 3 marcas internas já têm fontes próprias — isto vale para marcas novas.
+          </p>
+        </div>
+        {marca?.tipografia?.faces?.length ? (
+          <p className="text-xs text-mint-700">
+            {marca.tipografia.faces.length} arquivo(s) de fonte já importado(s).
+            Envie um novo zip só se quiser substituir.
+          </p>
+        ) : null}
+        <input
+          type="file"
+          name="fontes_zip"
+          accept=".zip,application/zip,application/x-zip-compressed"
+          className="block w-full text-sm text-onix-900 file:mr-3 file:rounded-md file:border-0 file:bg-onix-900 file:px-3 file:py-2 file:text-white file:text-sm"
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Field label="Fonte de título" hint="Família dos títulos/destaques.">
+            <input
+              type="text"
+              name="fonte_display"
+              defaultValue={familyName(marca?.tipografia?.display)}
+              maxLength={60}
+              placeholder="Ex: Playfair Display"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Fonte de corpo" hint="Família do texto corrido.">
+            <input
+              type="text"
+              name="fonte_body"
+              defaultValue={familyName(marca?.tipografia?.body)}
+              maxLength={60}
+              placeholder="Ex: Inter"
+              className={inputCls}
+            />
+          </Field>
+          <Field label="Fonte de números" hint="Opcional. Vazio = usa a de corpo.">
+            <input
+              type="text"
+              name="fonte_numeric"
+              defaultValue={familyName(marca?.tipografia?.numeric)}
+              maxLength={60}
+              placeholder="Ex: Oswald"
+              className={inputCls}
+            />
+          </Field>
         </div>
       </div>
 
