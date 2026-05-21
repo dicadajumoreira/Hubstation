@@ -3,6 +3,28 @@ import type { Marca } from "@/lib/sindicompany/marcas-db";
 const inputCls =
   "block w-full rounded-md border border-onix-100 bg-white px-3 py-2 text-sm text-onix-900 focus:outline-none focus:ring-2 focus:ring-mint-300";
 
+// Cores base (tema Sindicompany) — ponto de partida pra marca nova. As
+// chaves sao as MESMAS que o template do engine usa.
+const PALETA_BASE: Record<string, string> = {
+  onix: "#182028",
+  mint: "#88c8d0",
+  sand: "#e0b098",
+  lavender: "#bfc0ff",
+  purple: "#8890d0",
+  white: "#ffffff",
+  gray_5: "#faf7f2",
+};
+
+const PALETA_CAMPOS: { key: string; label: string; papel: string }[] = [
+  { key: "onix", label: "Onix / Navy", papel: "texto e fundos escuros" },
+  { key: "mint", label: "Acento", papel: "destaque, confiança" },
+  { key: "sand", label: "Quente", papel: "tom humano, calor" },
+  { key: "lavender", label: "Lavender", papel: "inovação / tech" },
+  { key: "purple", label: "Purple", papel: "profundidade / IA" },
+  { key: "white", label: "Branco", papel: "branco puro" },
+  { key: "gray_5", label: "Paper", papel: "fundo claro / off-white" },
+];
+
 function Field({
   label,
   hint,
@@ -167,6 +189,32 @@ export function MarcaForm({
           className={`${inputCls} text-xs`}
         />
       </Field>
+
+      <div className="space-y-2">
+        <div>
+          <label className="block text-sm font-medium text-onix-900">
+            Paleta da marca
+          </label>
+          <p className="text-xs text-g60">
+            Cores usadas no visual dos slides. Marca nova começa com o tema
+            base — ajuste pra dar identidade própria.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-lg border border-onix-100 bg-white p-4">
+          {PALETA_CAMPOS.map((c) => (
+            <div key={c.key} className="space-y-1">
+              <div className="text-xs font-medium text-onix-900">{c.label}</div>
+              <div className="text-[11px] text-g60 leading-tight">{c.papel}</div>
+              <input
+                type="color"
+                name={`paleta_${c.key}`}
+                defaultValue={marca?.paleta?.[c.key] ?? PALETA_BASE[c.key]}
+                className="h-9 w-full cursor-pointer rounded-md border border-onix-100 bg-white p-0.5"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
 
       <label className="flex items-center gap-2 text-sm text-onix-900">
         <input

@@ -44,6 +44,11 @@ _BRAND = "sindicompanybr"
 # (legado) ou a capa classica se a env nao estiver setada.
 _COVER_ARCHETYPE = ""
 
+# Paleta da marca atual, vinda da tabela `marcas` (coluna paleta jsonb).
+# Setada em gerar_carrossel() a partir do slug. None = sem override no DB,
+# entao _palette() cai nos valores chumbados (PALETTE / PALETTE_CONSVICTA).
+_BRAND_PALETTE: dict[str, str] | None = None
+
 
 def _asset_prefix() -> str:
     """Prefixo dos buckets de assets conforme a marca:
@@ -820,8 +825,44 @@ PALETTE_CONSVICTA = {
 
 
 def _palette() -> dict[str, str]:
-    """Paleta ativa conforme a marca."""
-    return PALETTE_CONSVICTA if _BRAND == "consvictabr" else PALETTE
+    """Paleta ativa da marca. Base chumbada (compat das 3 marcas atuais)
+    sobreposta pelos valores do DB (marcas.paleta), quando houver. O merge
+    garante que toda chave que o template usa exista mesmo se o DB so
+    trouxer parte das cores (marca nova herda as chaves que faltam)."""
+    base = PALETTE_CONSVICTA if _BRAND == "consvictabr" else PALETTE
+    if _BRAND_PALETTE:
+        return {**base, **_BRAND_PALETTE}
+    return base
+
+
+def _fetch_marca_paleta(slug: str) -> dict[str, str] | None:
+    """Le marcas.paleta do Supabase. Qualquer falha (coluna ainda nao
+    criada, marca sem paleta, erro de rede) cai em None -> usa os valores
+    chumbados. Mantem zero regressao independente do estado do banco."""
+    try:
+        sb = _sb_client()
+        res = (
+            sb.table("marcas")
+            .select("paleta")
+            .eq("slug", slug)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            return None
+        paleta = rows[0].get("paleta")
+        if isinstance(paleta, dict) and paleta:
+            # so chaves str->str (descarta lixo)
+            return {
+                str(k): str(v)
+                for k, v in paleta.items()
+                if isinstance(v, str) and v.strip()
+            }
+        return None
+    except Exception as e:  # noqa: BLE001 — fallback proposital
+        print(f"[carrossel] paleta do DB indisponivel ({e}); usando chumbada", flush=True)
+        return None
 
 
 # =============================================================================
@@ -7529,7 +7570,7 @@ def _humanizer_pass(
 
 def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
-    global _BRAND, _COVER_ARCHETYPE
+    global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE
     print(f"[carrossel] iniciando geração de {carrossel_id}", flush=True)
     try:
         carrossel = _fetch_carrossel(carrossel_id)
@@ -7547,6 +7588,14 @@ def gerar_carrossel(carrossel_id: str) -> int:
         else:
             _BRAND = "sindicompanybr"
         print(f"[carrossel] brand={_BRAND}", flush=True)
+
+        # Paleta data-driven: le marcas.paleta do DB. None = usa a chumbada.
+        _BRAND_PALETTE = _fetch_marca_paleta(_BRAND)
+        if _BRAND_PALETTE:
+            print(
+                f"[carrossel] paleta do DB ({len(_BRAND_PALETTE)} cores)",
+                flush=True,
+            )
 
         # Brand Hub 2026-05-17: prefere o arquetipo escolhido pela
         # editora no /carrossel/novo (coluna cover_archetype). Cai pra
