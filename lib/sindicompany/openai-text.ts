@@ -13,7 +13,7 @@ const OPENAI_API = "https://api.openai.com/v1/chat/completions";
 const FORMATO_INSTRUCOES: Record<string, string> = {
   historia_real:
     `FORMATO: HISTÓRIA REAL (o que mais engaja e salva).\n` +
-    `- Dê NOME ao personagem (Renata, Lucas, Carlos), nunca "um morador".\n` +
+    `- Dê um NOME PRÓPRIO ao personagem (use o nome indicado abaixo no briefing), nunca "um morador".\n` +
     `- Detalhes concretos: "6 kg", "4 horas", "23%", "Ap. 8B" — tornam crível.\n` +
     `- A história tem virada: setup → conflito → descoberta → resolução.\n` +
     `- Personagens/situações podem ser compostos. NUNCA invente condomínios ou endereços reais.\n` +
@@ -218,6 +218,18 @@ const OBJETIVO_INSTRUCOES: Record<string, string> = {
     `- CTA depende do tema: muito útil → "Salva esse post"; divide opiniões → CTA binário.`,
 };
 
+// Pool de nomes pra personagens de HISTÓRIA REAL. Um nome aleatório é
+// injetado por geração pra evitar que o modelo ancore sempre no mesmo
+// (cada chamada da API é stateless, então sem isso ele repete o primeiro
+// exemplo do prompt em todo roteiro).
+const NOMES_PERSONAGEM = [
+  "Marina", "Rafael", "Camila", "Bruno", "Patrícia", "Thiago", "Juliana",
+  "Eduardo", "Fernanda", "Gustavo", "Letícia", "Rodrigo", "Aline", "Felipe",
+  "Carla", "Diego", "Vanessa", "André", "Beatriz", "Marcelo", "Sabrina",
+  "Leonardo", "Priscila", "Vinícius", "Tatiane", "Henrique", "Larissa",
+  "Fábio", "Daniela", "Otávio", "Mariana", "Ricardo", "Cláudia", "Renato",
+];
+
 /** Gera 3 versões de copy pra carrossel — angulos editoriais distintos.
  *  O `brand` muda a estrategia (publico, objetivo, linguagem, assinatura).
  *  O `objetivo` define tom/gancho/CTA/formato/sucesso (mapas distintos
@@ -268,7 +280,14 @@ export async function gerarTresCopies(input: {
     "Recorte 3: o ângulo da transformação — o que muda quando a gestão é profissional.",
   ];
 
-  const buildPrompt = (angulo: string): string =>
+  const buildPrompt = (angulo: string): string => {
+    const nomePersonagem =
+      NOMES_PERSONAGEM[Math.floor(Math.random() * NOMES_PERSONAGEM.length)];
+    const nomeDirective =
+      input.formato === "historia_real"
+        ? `- PERSONAGEM: neste roteiro o protagonista se chama ${nomePersonagem}. Varie os nomes dos personagens secundários e nunca repita sempre o mesmo nome.\n`
+        : "";
+    return (
     `Crie UMA versão de copy pra um carrossel do ${handle}.\n` +
     `A VOZ, o público, o tom e o que pode/não pode estão no system prompt (a persona da marca) — SIGA À RISCA.\n` +
     objetivoBloco +
@@ -279,7 +298,9 @@ export async function gerarTresCopies(input: {
     `- Quantidade de slides: ${input.n_slides}\n` +
     (input.briefing ? `- Contexto extra: ${input.briefing}\n` : "") +
     `- ${angulo}\n` +
-    `\n${instrucoesFormato}\n\n` +
+    `\n${instrucoesFormato}\n` +
+    nomeDirective +
+    `\n` +
     (objetivoBloco
       ? `IMPORTANTE: o OBJETIVO acima é a intenção PRINCIPAL — quando objetivo e formato divergirem, o objetivo manda (CTA, tom, estrutura).\n\n`
       : "") +
@@ -294,7 +315,9 @@ export async function gerarTresCopies(input: {
     `- Acentos corretos em TODA palavra (você, síndico, condomínio, gestão). NUNCA: gerúndio, travessão (—), aspas curvas, emoji decorativo no slide, frases de introdução ("é importante ressaltar").\n` +
     `- LISTA NEGRA: papel fundamental, momento crucial, cenário em constante evolução, destacando a importância, o futuro é promissor, juntos somos mais fortes, destaca-se, vibrante, no coração de, em meio a, reflete a, simboliza a, evidencia a, desafios e oportunidades, rica diversidade, não apenas X mas também Y, mergulhando em, celebrando a, fomentando o, estudos mostram, especialistas afirmam.\n\n` +
     `Devolva JSON estrito (sem markdown):\n` +
-    `{ "slides": [{"tipo":"capa","titulo":"...","body":"..."}, ... total ${input.n_slides} slides], "legenda":"..." }`;
+    `{ "slides": [{"tipo":"capa","titulo":"...","body":"..."}, ... total ${input.n_slides} slides], "legenda":"..." }`
+    );
+  };
 
   // 3 chamadas em PARALELO, uma por angulo — cada uma e pequena (~6 slides
   // + legenda), entao termina rapido e cabe folgado no cap de 26s do
