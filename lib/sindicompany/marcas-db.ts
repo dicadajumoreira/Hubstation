@@ -125,23 +125,26 @@ export interface MarcaInput {
 
 export async function createMarca(input: MarcaInput): Promise<Marca> {
   const supabase = createAdminClient();
+  const row: Record<string, unknown> = {
+    slug: input.slug,
+    nome: input.nome,
+    handle: input.handle,
+    nicho: input.nicho ?? null,
+    bucket_prefix: input.bucketPrefix,
+    route_slug: input.routeSlug,
+    ativo: input.ativo ?? true,
+    ordem: input.ordem ?? 0,
+    persona: input.persona ?? null,
+    assinatura: input.assinatura ?? null,
+    temas_sugeridos: input.temasSugeridos ?? null,
+    paleta: input.paleta ?? null,
+  };
+  // So inclui tipografia quando ha fontes — assim criar marca comum nao
+  // depende da coluna existir (deploy independente da migration).
+  if (input.tipografia != null) row.tipografia = input.tipografia;
   const { data, error } = await supabase
     .from(TABLE)
-    .insert({
-      slug: input.slug,
-      nome: input.nome,
-      handle: input.handle,
-      nicho: input.nicho ?? null,
-      bucket_prefix: input.bucketPrefix,
-      route_slug: input.routeSlug,
-      ativo: input.ativo ?? true,
-      ordem: input.ordem ?? 0,
-      persona: input.persona ?? null,
-      assinatura: input.assinatura ?? null,
-      temas_sugeridos: input.temasSugeridos ?? null,
-      paleta: input.paleta ?? null,
-      tipografia: input.tipografia ?? null,
-    })
+    .insert(row)
     .select()
     .single();
   if (error || !data) throw new Error(error?.message ?? "Falha ao criar marca.");
