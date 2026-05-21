@@ -1,4 +1,5 @@
 import type { Marca } from "@/lib/sindicompany/marcas-db";
+import { MARCA_ASSET_SLOTS } from "@/lib/sindicompany/marca-assets";
 
 const inputCls =
   "block w-full rounded-md border border-onix-100 bg-white px-3 py-2 text-sm text-onix-900 focus:outline-none focus:ring-2 focus:ring-mint-300";
@@ -281,6 +282,30 @@ export function MarcaForm({
               className={inputCls}
             />
           </Field>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div>
+          <label className="block text-sm font-medium text-onix-900">
+            Logos e ícones
+          </label>
+          <p className="text-xs text-g60">
+            Imagens da marca usadas nos slides (PNG, SVG, WEBP ou JPG).
+            {isEdit ? " Deixe vazio pra manter o atual." : ""}
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-onix-100 bg-white p-4">
+          {MARCA_ASSET_SLOTS.map((a) => (
+            <Field key={a.field} label={a.label} hint={a.hint}>
+              <input
+                type="file"
+                name={a.field}
+                accept="image/png,image/svg+xml,image/webp,image/jpeg"
+                className="block w-full text-sm text-onix-900 file:mr-3 file:rounded-md file:border-0 file:bg-onix-100 file:px-3 file:py-1.5 file:text-onix-900 file:text-xs"
+              />
+            </Field>
+          ))}
         </div>
       </div>
 

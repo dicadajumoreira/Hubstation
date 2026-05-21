@@ -10,6 +10,7 @@ import {
   type MarcaTipografia,
 } from "@/lib/sindicompany/marcas-db";
 import { processFontZip } from "@/lib/sindicompany/marca-fonts";
+import { uploadMarcaAssets } from "@/lib/sindicompany/marca-assets";
 
 async function requireAuth() {
   const store = await cookies();
@@ -106,6 +107,7 @@ export async function criarMarcaAction(formData: FormData): Promise<void> {
       paleta: paletaFromForm(formData),
       tipografia: tipografia ?? null,
     });
+    await uploadMarcaAssets(formData, bucketPrefix);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha ao criar marca.";
     fail(msg.includes("duplicate") ? `Já existe uma marca com o slug "${slug}".` : msg);
@@ -145,6 +147,7 @@ export async function atualizarMarcaAction(formData: FormData): Promise<void> {
       paleta: paletaFromForm(formData),
       ...(tipografia ? { tipografia } : {}),
     });
+    await uploadMarcaAssets(formData, prefix);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha ao salvar.";
     redirect(`${back}?error=${encodeURIComponent(msg)}`);
