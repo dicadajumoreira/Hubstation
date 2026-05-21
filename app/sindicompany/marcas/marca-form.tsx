@@ -1,5 +1,6 @@
 import type { Marca } from "@/lib/sindicompany/marcas-db";
 import { MARCA_ASSET_SLOTS } from "@/lib/sindicompany/marca-assets";
+import { ColorField } from "./marca-palette-field";
 
 const inputCls =
   "block w-full rounded-md border border-onix-100 bg-white px-3 py-2 text-sm text-onix-900 focus:outline-none focus:ring-2 focus:ring-mint-300";
@@ -209,18 +210,15 @@ export function MarcaForm({
             base — ajuste pra dar identidade própria.
           </p>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-lg border border-onix-100 bg-white p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-lg border border-onix-100 bg-white p-4">
           {PALETA_CAMPOS.map((c) => (
-            <div key={c.key} className="space-y-1">
-              <div className="text-xs font-medium text-onix-900">{c.label}</div>
-              <div className="text-[11px] text-g60 leading-tight">{c.papel}</div>
-              <input
-                type="color"
-                name={`paleta_${c.key}`}
-                defaultValue={marca?.paleta?.[c.key] ?? PALETA_BASE[c.key]}
-                className="h-9 w-full cursor-pointer rounded-md border border-onix-100 bg-white p-0.5"
-              />
-            </div>
+            <ColorField
+              key={c.key}
+              name={`paleta_${c.key}`}
+              label={c.label}
+              papel={c.papel}
+              defaultValue={marca?.paleta?.[c.key] ?? PALETA_BASE[c.key]}
+            />
           ))}
         </div>
       </div>
