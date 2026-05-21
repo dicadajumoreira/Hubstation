@@ -9,12 +9,10 @@ import {
   AssetBrand,
   AssetNode,
   basenameForLeaf,
-  BRAND_HANDLE,
-  BRAND_LABEL,
-  BRAND_ROUTE,
   bucketForLeaf,
   findNode,
 } from "@/lib/sindicompany/asset-hierarchy";
+import { getMarca } from "@/lib/sindicompany/marcas-db";
 import { AssetSlotGrid } from "./asset-slot-grid";
 import { DashboardShell } from "./shell";
 import { UploadLibraryButton } from "./consvicta-assets/upload-library-button";
@@ -83,19 +81,28 @@ interface AssetExplorerProps {
 }
 
 export async function AssetExplorer({ brand, path, uploadIntent }: AssetExplorerProps) {
-  const brandLabel = BRAND_LABEL[brand];
-  const brandHandle = BRAND_HANDLE[brand];
-  const brandRoute = BRAND_ROUTE[brand];
+  const marca = await getMarca(brand);
+  const brandLabel = marca?.nome ?? brand;
+  const brandHandle = marca?.handle ?? `@${brand}`;
+  const brandRoute = `/sindicompany/${marca?.routeSlug ?? "assets"}`;
+  const bucketPrefix = marca?.bucketPrefix ?? "__";
 
   // Path vazio = HUB (visao geral das 6 secoes)
   if (path.length === 0) {
-    return <HubView brand={brand} />;
+    return (
+      <HubView
+        brand={brand}
+        brandLabel={brandLabel}
+        brandHandle={brandHandle}
+        brandRoute={brandRoute}
+      />
+    );
   }
 
   // Encontra o node
   const node = findNode(path);
   if (!node) {
-    return <NotFoundView brand={brand} brandLabel={brandLabel} brandRoute={brandRoute} />;
+    return <NotFoundView brandLabel={brandLabel} brandRoute={brandRoute} />;
   }
 
   // Tem children = BRANCH (mostra subcategorias)
@@ -104,7 +111,7 @@ export async function AssetExplorer({ brand, path, uploadIntent }: AssetExplorer
       // await aqui — BranchView precisa fetch thumbnails dos child-leaves
       // pra mostrar preview do 1o upload de cada slug.
       await BranchView({
-        brand,
+        bucketPrefix,
         brandLabel,
         brandRoute,
         path,
@@ -117,6 +124,7 @@ export async function AssetExplorer({ brand, path, uploadIntent }: AssetExplorer
   return (
     <LeafView
       brand={brand}
+      bucketPrefix={bucketPrefix}
       brandLabel={brandLabel}
       brandHandle={brandHandle}
       brandRoute={brandRoute}
@@ -130,11 +138,17 @@ export async function AssetExplorer({ brand, path, uploadIntent }: AssetExplorer
 // ─────────────────────────────────────────────────────────────────────
 // HUB — visao geral das 6 secoes da marca
 // ─────────────────────────────────────────────────────────────────────
-function HubView({ brand }: { brand: AssetBrand }) {
-  const brandLabel = BRAND_LABEL[brand];
-  const brandHandle = BRAND_HANDLE[brand];
-  const brandRoute = BRAND_ROUTE[brand];
-
+function HubView({
+  brand,
+  brandLabel,
+  brandHandle,
+  brandRoute,
+}: {
+  brand: AssetBrand;
+  brandLabel: string;
+  brandHandle: string;
+  brandRoute: string;
+}) {
   return (
     <DashboardShell>
       <main className="max-w-5xl mx-auto px-6 py-12 space-y-8">
@@ -198,13 +212,13 @@ function HubView({ brand }: { brand: AssetBrand }) {
 // BRANCH — node intermediário, mostra subcategorias clicáveis
 // ─────────────────────────────────────────────────────────────────────
 async function BranchView({
-  brand,
+  bucketPrefix,
   brandLabel,
   brandRoute,
   path,
   node,
 }: {
-  brand: AssetBrand;
+  bucketPrefix: string;
   brandLabel: string;
   brandRoute: string;
   path: string[];
@@ -273,7 +287,7 @@ async function BranchView({
       const fromCarrossel =
         carrosselCovers.get(child.slug) ?? formatoPreviews.get(child.slug);
       if (fromCarrossel) return fromCarrossel;
-      const bucket = bucketForLeaf(brand, [...path, child.slug], child);
+      const bucket = bucketForLeaf(bucketPrefix, [...path, child.slug], child);
       const basename = basenameForLeaf(child);
       const urls = await listLeafSlotUrls(bucket, basename, child.slotsDefault);
       return urls.find((u): u is string => Boolean(u)) ?? null;
@@ -355,6 +369,7 @@ async function BranchView({
 // ─────────────────────────────────────────────────────────────────────
 async function LeafView({
   brand,
+  bucketPrefix,
   brandLabel,
   brandHandle,
   brandRoute,
@@ -363,6 +378,7 @@ async function LeafView({
   uploadIntent,
 }: {
   brand: AssetBrand;
+  bucketPrefix: string;
   brandLabel: string;
   brandHandle: string;
   brandRoute: string;
@@ -370,7 +386,7 @@ async function LeafView({
   node: AssetNode;
   uploadIntent: AssetExplorerProps["uploadIntent"];
 }) {
-  const bucket = bucketForLeaf(brand, path, node);
+  const bucket = bucketForLeaf(bucketPrefix, path, node);
   const basename = basenameForLeaf(node);
   const urls = await listLeafSlotUrls(bucket, basename, node.slotsDefault);
 
@@ -428,7 +444,6 @@ function NotFoundView({
   brandLabel,
   brandRoute,
 }: {
-  brand: AssetBrand;
   brandLabel: string;
   brandRoute: string;
 }) {

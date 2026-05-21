@@ -22,7 +22,11 @@
  * Onde brand-prefix = "" (Sindicompany), "by-" (By), "consvicta-".
  */
 
-export type AssetBrand = "sindicompanybr" | "bysindicompany" | "consvictabr";
+import type { MarcaSlug } from "@/lib/sindicompany/marcas-db";
+
+// Slug da marca. A lista valida (e os metadados: prefixo, rota, nome,
+// handle) vive na tabela `marcas` (marcas-db.ts). Use getMarca(slug).
+export type AssetBrand = MarcaSlug;
 
 export interface AssetNode {
   slug: string;
@@ -318,30 +322,8 @@ export const ASSET_HIERARCHY: AssetNode[] = [
 // ─────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────
-
-export const BRAND_PREFIX: Record<AssetBrand, string> = {
-  sindicompanybr: "__",
-  bysindicompany: "__by-",
-  consvictabr: "__consvicta-",
-};
-
-export const BRAND_ROUTE: Record<AssetBrand, string> = {
-  sindicompanybr: "/sindicompany/assets",
-  bysindicompany: "/sindicompany/by-assets",
-  consvictabr: "/sindicompany/consvicta-assets",
-};
-
-export const BRAND_LABEL: Record<AssetBrand, string> = {
-  sindicompanybr: "Sindicompany",
-  bysindicompany: "BySindicompany",
-  consvictabr: "Consvicta",
-};
-
-export const BRAND_HANDLE: Record<AssetBrand, string> = {
-  sindicompanybr: "@sindicompanybr",
-  bysindicompany: "@bysindicompany",
-  consvictabr: "@consvictabr",
-};
+// Metadados de marca (prefixo de bucket, rota, nome, handle) NAO vivem
+// mais aqui — leia da tabela `marcas` via getMarca(slug) (marcas-db.ts).
 
 export function findNode(path: string[]): AssetNode | null {
   if (path.length === 0) return null;
@@ -357,11 +339,11 @@ export function findNode(path: string[]): AssetNode | null {
 }
 
 export function bucketForLeaf(
-  brand: AssetBrand,
+  bucketPrefix: string,
   pathSegments: string[],
   leafNode: AssetNode,
 ): string {
-  const prefix = BRAND_PREFIX[brand];
+  const prefix = bucketPrefix;
   if (leafNode.legacyBucket) {
     return `${prefix}${leafNode.legacyBucket}`;
   }

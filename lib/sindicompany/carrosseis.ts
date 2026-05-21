@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { MarcaSlug } from "@/lib/sindicompany/marcas-db";
 
 export type CarrosselStatus = "rascunho" | "em_producao" | "publicada" | "erro";
 
@@ -13,13 +14,9 @@ export interface CarrosselCopy {
   legenda: string;
 }
 
-export type CarrosselBrand = "sindicompanybr" | "bysindicompany" | "consvictabr";
-
-export const CARROSSEL_BRANDS: { id: CarrosselBrand; handle: string; label: string }[] = [
-  { id: "sindicompanybr", handle: "@sindicompanybr", label: "Sindicompany" },
-  { id: "bysindicompany", handle: "@bysindicompany", label: "BySindicompany" },
-  { id: "consvictabr", handle: "@consvictabr", label: "Consvicta" },
-];
+// Slug da marca. A lista valida vive na tabela `marcas` (marcas-db.ts);
+// nao e mais um union chumbado.
+export type CarrosselBrand = MarcaSlug;
 
 // Arquetipos de capa do Brand Hub Sindicompany 2026-05-17. Espelha o
 // registry COVER_ARCHETYPES_SC do revista-engine/api/carrossel_generate.py.
