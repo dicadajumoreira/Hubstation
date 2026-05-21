@@ -74,60 +74,97 @@ export async function processFontZip(
   bucketPrefix: string,
   fams: { display: string; body: string; numeric: string },
 ): Promise<ProcessFontZipResult> {
+  return processFontZips([zipBytes], bucketPrefix, fams);
+}
+
+// Preferencia de formato no de-dup: woff2 (menor) > woff > otf > ttf.
+function formatRank(name: string): number {
+  const e = name.toLowerCase();
+  if (e.endsWith(".woff2")) return 4;
+  if (e.endsWith(".woff")) return 3;
+  if (e.endsWith(".otf")) return 2;
+  return 1;
+}
+
+/** Processa um ou mais ZIPs de fontes. De-duplica por familia+peso+estilo
+ *  preferindo o formato mais leve (woff2), sobe os vencedores pro bucket e
+ *  monta a tipografia. Lanca Error amigavel em problema. */
+export async function processFontZips(
+  zips: Uint8Array[],
+  bucketPrefix: string,
+  fams: { display: string; body: string; numeric: string },
+): Promise<ProcessFontZipResult> {
   const display = fams.display.trim();
   const body = fams.body.trim();
   const numeric = fams.numeric.trim() || body;
   if (!display || !body) {
     throw new Error("Informe ao menos a fonte de título e a de corpo.");
   }
-
-  let files: Record<string, Uint8Array>;
-  try {
-    files = unzipSync(zipBytes);
-  } catch {
-    throw new Error("Não consegui abrir o .zip — confira se é um zip válido.");
-  }
-
   const uniqueFams = Array.from(new Set([display, body, numeric].filter(Boolean)));
-  const supabase = createAdminClient();
-  const faces: MarcaFontFace[] = [];
-  const skipped: string[] = [];
-  let count = 0;
 
-  for (const [path, bytes] of Object.entries(files)) {
-    const name = path.split("/").pop() || path;
-    // ignora lixo de zip (pasta __MACOSX, dotfiles) e nao-fontes
-    if (!name || name.startsWith(".") || path.includes("__MACOSX")) continue;
-    if (!FONT_EXT.test(name)) continue;
-    if (!bytes.length) continue;
-    if (++count > MAX_FILES) {
-      throw new Error(`Zip tem fontes demais (máx ${MAX_FILES} arquivos).`);
+  // Fase 1: junta candidatos de todos os zips (sem subir ainda).
+  interface Cand {
+    name: string;
+    bytes: Uint8Array;
+    family: string;
+    weight: number | string;
+    style: "normal" | "italic";
+  }
+  const best = new Map<string, Cand>();
+  const skipped: string[] = [];
+
+  for (const zipBytes of zips) {
+    let files: Record<string, Uint8Array>;
+    try {
+      files = unzipSync(zipBytes);
+    } catch {
+      throw new Error("Não consegui abrir um dos .zip — confira se é um zip válido.");
     }
-    const base = name.replace(FONT_EXT, "");
-    const fam = matchFamily(base, uniqueFams);
-    if (!fam) {
-      skipped.push(name);
-      continue;
+    for (const [path, bytes] of Object.entries(files)) {
+      const name = path.split("/").pop() || path;
+      if (!name || name.startsWith(".") || path.includes("__MACOSX")) continue;
+      if (!FONT_EXT.test(name)) continue;
+      if (!bytes.length) continue;
+      const base = name.replace(FONT_EXT, "");
+      const family = matchFamily(base, uniqueFams);
+      if (!family) {
+        skipped.push(name);
+        continue;
+      }
+      const weight = parseWeight(base);
+      const style = parseStyle(base);
+      const key = `${family}|${weight}|${style}`;
+      const cur = best.get(key);
+      // Mantem o formato mais leve quando o mesmo peso aparece duplicado
+      // (ex: pacote com .ttf E .woff2 do mesmo Bold).
+      if (!cur || formatRank(name) > formatRank(cur.name)) {
+        best.set(key, { name, bytes, family, weight, style });
+      }
     }
-    const dest = `${bucketPrefix}fonts/${name}`;
-    const { error } = await supabase.storage
-      .from(BUCKET)
-      .upload(dest, bytes, { contentType: contentType(name), upsert: true });
-    if (error) throw new Error(`Falha ao subir ${name}: ${error.message}`);
-    faces.push({
-      family: fam,
-      weight: parseWeight(base),
-      style: parseStyle(base),
-      file: name,
-    });
   }
 
-  if (faces.length === 0) {
+  const cands = Array.from(best.values());
+  if (cands.length === 0) {
     throw new Error(
       "Nenhum arquivo de fonte casou com os nomes informados. " +
         "Confira se os arquivos do zip começam com o nome da família " +
         "(ex: o arquivo de 'Playfair Display' deve se chamar PlayfairDisplay-Bold.woff2).",
     );
+  }
+  if (cands.length > MAX_FILES) {
+    throw new Error(`Fontes demais (${cands.length}); máximo ${MAX_FILES}.`);
+  }
+
+  // Fase 2: sobe os vencedores.
+  const supabase = createAdminClient();
+  const faces: MarcaFontFace[] = [];
+  for (const c of cands) {
+    const dest = `${bucketPrefix}fonts/${c.name}`;
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(dest, c.bytes, { contentType: contentType(c.name), upsert: true });
+    if (error) throw new Error(`Falha ao subir ${c.name}: ${error.message}`);
+    faces.push({ family: c.family, weight: c.weight, style: c.style, file: c.name });
   }
 
   return {
@@ -141,3 +178,4 @@ export async function processFontZip(
     skipped,
   };
 }
+

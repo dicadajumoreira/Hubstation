@@ -9,7 +9,7 @@ import {
   updateMarca,
   type MarcaTipografia,
 } from "@/lib/sindicompany/marcas-db";
-import { processFontZip } from "@/lib/sindicompany/marca-fonts";
+import { processFontZips } from "@/lib/sindicompany/marca-fonts";
 import { uploadMarcaAssets } from "@/lib/sindicompany/marca-assets";
 
 async function requireAuth() {
@@ -53,10 +53,14 @@ async function tipografiaFromForm(
   fd: FormData,
   bucketPrefix: string,
 ): Promise<MarcaTipografia | undefined> {
-  const file = fd.get("fontes_zip");
-  if (!(file instanceof File) || file.size === 0) return undefined;
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const { tipografia } = await processFontZip(bytes, bucketPrefix, {
+  const files = fd
+    .getAll("fontes_zip")
+    .filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) return undefined;
+  const zips = await Promise.all(
+    files.map(async (f) => new Uint8Array(await f.arrayBuffer())),
+  );
+  const { tipografia } = await processFontZips(zips, bucketPrefix, {
     display: s(fd, "fonte_display"),
     body: s(fd, "fonte_body"),
     numeric: s(fd, "fonte_numeric"),

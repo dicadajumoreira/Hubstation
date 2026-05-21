@@ -229,12 +229,14 @@ export function MarcaForm({
             Tipografia (fontes da marca)
           </label>
           <p className="text-xs text-g60">
-            Envie um <strong>.zip</strong> com os arquivos <code>.otf</code>/
-            <code>.ttf</code>/<code>.woff</code>/<code>.woff2</code> da marca e
-            diga qual família é o título, o corpo e os números. Os nomes dos
-            arquivos devem começar com o nome da família e indicar o peso/estilo
-            (ex: <code>Playfair-Bold.woff2</code>, <code>Inter-Regular.woff2</code>).
-            As 3 marcas internas já têm fontes próprias — isto vale para marcas novas.
+            Envie um ou mais <strong>.zip</strong> com os arquivos{" "}
+            <code>.otf</code>/<code>.ttf</code>/<code>.woff</code>/
+            <code>.woff2</code> da marca e diga qual família é o título, o corpo
+            e os números. Os nomes dos arquivos devem começar com o nome da
+            família e indicar o peso/estilo (ex: <code>Playfair-Bold.woff2</code>,{" "}
+            <code>Inter-Regular.woff2</code>). Prefira poucos pesos em{" "}
+            <code>.woff2</code> — evite pacotes completos pesados. As 3 marcas
+            internas já têm fontes próprias; isto vale para marcas novas.
           </p>
         </div>
         {marca?.tipografia?.faces?.length ? (
@@ -247,6 +249,7 @@ export function MarcaForm({
           type="file"
           name="fontes_zip"
           accept=".zip,application/zip,application/x-zip-compressed"
+          multiple
           className="block w-full text-sm text-onix-900 file:mr-3 file:rounded-md file:border-0 file:bg-onix-900 file:px-3 file:py-2 file:text-white file:text-sm"
         />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

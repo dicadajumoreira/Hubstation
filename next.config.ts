@@ -5,8 +5,10 @@ const nextConfig: NextConfig = {
   experimental: {
     typedRoutes: false,
     serverActions: {
-      // Default é 1MB — fotos de síndico/gestor podem chegar a 5MB.
-      bodySizeLimit: "8mb",
+      // Default é 1MB. Fotos de síndico/gestor chegam a ~5MB e zips de
+      // fontes de marca podem passar disso — acima do teto o erro é de
+      // página (reload), antes do nosso try/catch. Por isso 20MB.
+      bodySizeLimit: "20mb",
     },
   },
   // Empacota os SVGs da biblioteca Consvicta na serverless function
