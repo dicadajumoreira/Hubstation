@@ -891,7 +891,7 @@ def _upload_slides_zip(
 FORMATO_INSTRUCOES = {
     "historia_real": (
         "FORMATO: HISTORIA REAL (o que mais engaja e salva).\n"
-        "- De NOME ao personagem (Renata, Lucas, Carlos), nunca 'um morador'.\n"
+        "- De um NOME PROPRIO brasileiro ao personagem, variando a cada roteiro (nunca use sempre o mesmo nome), nunca 'um morador'.\n"
         "- Detalhes concretos: '6 kg', '4 horas', '23%', 'Ap. 8B'.\n"
         "- A historia tem virada: setup -> conflito -> descoberta -> resolucao.\n"
         "- Personagens/situacoes podem ser compostos. NUNCA invente condominios/enderecos reais.\n"
