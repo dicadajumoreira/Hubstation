@@ -52,6 +52,7 @@ _COVER_ARCHETYPE = ""
 _BRAND_PALETTE: dict[str, str] | None = None
 _BRAND_PREFIX = ""  # bucket_prefix do DB (ex: __minhamarca-)
 _BRAND_HANDLE = ""  # handle do DB (ex: @minhamarca)
+_BRAND_NAME = ""  # nome de exibicao do DB (ex: Lavandery)
 # Tipografia data-driven da marca (coluna marcas.tipografia). Só usada por
 # marca nova — as 3 chumbadas seguem com as fontes embutidas. Shape:
 # {"display","body","numeric","faces":[{family,weight,style,file}, ...]}
@@ -82,6 +83,19 @@ def _handle() -> str:
     if _BRAND == "sindicompanybr":
         return "@sindicompanybr"
     return _BRAND_HANDLE or f"@{_BRAND}"
+
+
+def _brand_label() -> str:
+    """Nome de exibicao da marca (ex: badge do CTA). 3 marcas chumbadas
+    mantem o rotulo exato; marca nova usa o nome do cadastro, caindo no
+    handle sem @ ou no slug."""
+    if _BRAND == "bysindicompany":
+        return "By Sindicompany"
+    if _BRAND == "consvictabr":
+        return "Consvicta"
+    if _BRAND == "sindicompanybr":
+        return "Sindicompany"
+    return _BRAND_NAME or _handle().lstrip("@") or _BRAND
 
 
 _PATTERNS_CACHE: list[str] | None = None  # data URLs prontos pra uso
@@ -953,7 +967,7 @@ def _fetch_marca(slug: str) -> dict[str, Any] | None:
         sb = _sb_client()
         res = (
             sb.table("marcas")
-            .select("paleta, bucket_prefix, handle")
+            .select("paleta, bucket_prefix, handle, nome")
             .eq("slug", slug)
             .limit(1)
             .execute()
@@ -6941,12 +6955,7 @@ def _slide_html(
             accent_text = p["white"]
 
     if is_cta:
-        if _BRAND == "consvictabr":
-            badge_label = "Consvicta"
-        elif _BRAND == "bysindicompany":
-            badge_label = "By Sindicompany"
-        else:
-            badge_label = "Sindicompany"
+        badge_label = _brand_label()
     else:
         badge_label = f"{slide_idx} / {total}"
 
@@ -7717,7 +7726,7 @@ def _humanizer_pass(
 def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
     global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE, _BRAND_PREFIX, _BRAND_HANDLE
-    global _BRAND_TIPOGRAFIA
+    global _BRAND_TIPOGRAFIA, _BRAND_NAME
     print(f"[carrossel] iniciando geração de {carrossel_id}", flush=True)
     try:
         carrossel = _fetch_carrossel(carrossel_id)
@@ -7741,6 +7750,7 @@ def gerar_carrossel(carrossel_id: str) -> int:
         _BRAND_PALETTE = _paleta_from_marca(_marca)
         _BRAND_PREFIX = (_marca or {}).get("bucket_prefix") or ""
         _BRAND_HANDLE = (_marca or {}).get("handle") or ""
+        _BRAND_NAME = (_marca or {}).get("nome") or ""
         if _BRAND_PALETTE:
             print(
                 f"[carrossel] paleta do DB ({len(_BRAND_PALETTE)} cores)",
