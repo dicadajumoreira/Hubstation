@@ -16,6 +16,7 @@ import {
 } from "@/lib/sindicompany/carrosseis";
 import { describeError } from "@/lib/sindicompany/errors";
 import { dispatchGenerateCarrossel } from "@/lib/sindicompany/engine";
+import { listMarcas } from "@/lib/sindicompany/marcas-db";
 import {
   buildCarrosselPromptSafe,
   generateImage,
@@ -102,20 +103,24 @@ export async function getCarrosselFotoUploadIntent(
 export async function iniciarCarrosselAction(formData: FormData): Promise<void> {
   await requireAuth();
 
+  // Marca data-driven: aceita qualquer slug de marca ATIVA (cadastro).
+  // Marca desconhecida/inativa cai no default sindicompanybr. Antes isso
+  // achatava toda marca nova pra uma das 3 chumbadas — agora o slug real
+  // segue pro engine (buckets/handle/paleta/fontes proprios).
   const brandRaw = getStr(formData, "brand");
-  const brand: "sindicompanybr" | "bysindicompany" | "consvictabr" =
-    brandRaw === "bysindicompany"
-      ? "bysindicompany"
-      : brandRaw === "consvictabr"
-        ? "consvictabr"
-        : "sindicompanybr";
+  const marcasAtivas = await listMarcas({ ativo: true });
+  const brand = marcasAtivas.some((m) => m.slug === brandRaw)
+    ? brandRaw
+    : "sindicompanybr";
   const objetivoRaw = getStr(formData, "objetivo");
   const objetivosValidos =
     brand === "bysindicompany"
       ? ["comentarios", "salvamentos", "clientes", "autoridade"]
       : brand === "consvictabr"
         ? ["comentarios", "salvamentos", "clientes", "autoridade"]
-        : ["comentarios", "salvamentos", "clientes", "educar"];
+        : brand === "sindicompanybr"
+          ? ["comentarios", "salvamentos", "clientes", "educar"]
+          : ["comentarios", "salvamentos", "clientes", "autoridade", "educar"];
   const objetivo = objetivosValidos.includes(objetivoRaw) ? objetivoRaw : "";
   const titulo = getStr(formData, "titulo");
   const temaSelecionado = getStr(formData, "tema");

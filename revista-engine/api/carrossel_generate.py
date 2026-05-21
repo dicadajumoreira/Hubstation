@@ -44,10 +44,13 @@ _BRAND = "sindicompanybr"
 # (legado) ou a capa classica se a env nao estiver setada.
 _COVER_ARCHETYPE = ""
 
-# Paleta da marca atual, vinda da tabela `marcas` (coluna paleta jsonb).
-# Setada em gerar_carrossel() a partir do slug. None = sem override no DB,
-# entao _palette() cai nos valores chumbados (PALETTE / PALETTE_CONSVICTA).
+# Identidade da marca atual, vinda da tabela `marcas`. Setadas em
+# gerar_carrossel() a partir do slug. Para as 3 marcas chumbadas
+# (sindicompanybr/bysindicompany/consvictabr) prefixo e handle continuam
+# vindo das funcoes hardcoded; estes globais so sao usados por MARCA NOVA.
 _BRAND_PALETTE: dict[str, str] | None = None
+_BRAND_PREFIX = ""  # bucket_prefix do DB (ex: __minhamarca-)
+_BRAND_HANDLE = ""  # handle do DB (ex: @minhamarca)
 
 
 def _asset_prefix() -> str:
@@ -59,7 +62,11 @@ def _asset_prefix() -> str:
         return "__by-"
     if _BRAND == "consvictabr":
         return "__consvicta-"
-    return "__"
+    if _BRAND == "sindicompanybr":
+        return "__"
+    # Marca nova: prefixo do cadastro (tabela marcas). Fallback defensivo
+    # __<slug>- igual ao default que o cadastro grava.
+    return _BRAND_PREFIX or f"__{_BRAND}-"
 
 
 def _handle() -> str:
@@ -67,7 +74,9 @@ def _handle() -> str:
         return "@bysindicompany"
     if _BRAND == "consvictabr":
         return "@consvictabr"
-    return "@sindicompanybr"
+    if _BRAND == "sindicompanybr":
+        return "@sindicompanybr"
+    return _BRAND_HANDLE or f"@{_BRAND}"
 
 
 _PATTERNS_CACHE: list[str] | None = None  # data URLs prontos pra uso
@@ -835,34 +844,38 @@ def _palette() -> dict[str, str]:
     return base
 
 
-def _fetch_marca_paleta(slug: str) -> dict[str, str] | None:
-    """Le marcas.paleta do Supabase. Qualquer falha (coluna ainda nao
-    criada, marca sem paleta, erro de rede) cai em None -> usa os valores
-    chumbados. Mantem zero regressao independente do estado do banco."""
+def _fetch_marca(slug: str) -> dict[str, Any] | None:
+    """Le a marca do Supabase (paleta, bucket_prefix, handle) numa query.
+    Qualquer falha (marca ausente, erro de rede) cai em None -> identidade
+    chumbada. Mantem zero regressao independente do estado do banco."""
     try:
         sb = _sb_client()
         res = (
             sb.table("marcas")
-            .select("paleta")
+            .select("paleta, bucket_prefix, handle")
             .eq("slug", slug)
             .limit(1)
             .execute()
         )
         rows = res.data or []
-        if not rows:
-            return None
-        paleta = rows[0].get("paleta")
-        if isinstance(paleta, dict) and paleta:
-            # so chaves str->str (descarta lixo)
-            return {
-                str(k): str(v)
-                for k, v in paleta.items()
-                if isinstance(v, str) and v.strip()
-            }
-        return None
+        return rows[0] if rows else None
     except Exception as e:  # noqa: BLE001 — fallback proposital
-        print(f"[carrossel] paleta do DB indisponivel ({e}); usando chumbada", flush=True)
+        print(f"[carrossel] marca do DB indisponivel ({e}); usando chumbada", flush=True)
         return None
+
+
+def _paleta_from_marca(marca: dict[str, Any] | None) -> dict[str, str] | None:
+    """Extrai a paleta (str->str) da marca, descartando lixo. None se vazia."""
+    if not marca:
+        return None
+    paleta = marca.get("paleta")
+    if isinstance(paleta, dict) and paleta:
+        return {
+            str(k): str(v)
+            for k, v in paleta.items()
+            if isinstance(v, str) and v.strip()
+        }
+    return None
 
 
 # =============================================================================
@@ -7570,7 +7583,7 @@ def _humanizer_pass(
 
 def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
-    global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE
+    global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE, _BRAND_PREFIX, _BRAND_HANDLE
     print(f"[carrossel] iniciando geração de {carrossel_id}", flush=True)
     try:
         carrossel = _fetch_carrossel(carrossel_id)
@@ -7580,17 +7593,20 @@ def gerar_carrossel(carrossel_id: str) -> int:
 
         # Define a marca ANTES de qualquer lookup de asset (buckets,
         # handle, logo). Default sindicompanybr pra registros legacy.
+        # Mantem o slug REAL da marca (marca nova inclusive). Sanitiza pra
+        # [a-z0-9-] porque o slug vira parte de URL de storage. Vazio ->
+        # default sindicompanybr (registros legacy).
         b = (carrossel.get("brand") or "sindicompanybr").strip().lower()
-        if b == "bysindicompany":
-            _BRAND = "bysindicompany"
-        elif b == "consvictabr":
-            _BRAND = "consvictabr"
-        else:
-            _BRAND = "sindicompanybr"
+        _BRAND = re.sub(r"[^a-z0-9-]", "", b) or "sindicompanybr"
         print(f"[carrossel] brand={_BRAND}", flush=True)
 
-        # Paleta data-driven: le marcas.paleta do DB. None = usa a chumbada.
-        _BRAND_PALETTE = _fetch_marca_paleta(_BRAND)
+        # Identidade data-driven (tabela marcas): paleta + prefixo de bucket
+        # + handle. Para as 3 marcas chumbadas prefixo/handle continuam vindo
+        # das funcoes hardcoded; estes valores so sao usados por marca nova.
+        _marca = _fetch_marca(_BRAND)
+        _BRAND_PALETTE = _paleta_from_marca(_marca)
+        _BRAND_PREFIX = (_marca or {}).get("bucket_prefix") or ""
+        _BRAND_HANDLE = (_marca or {}).get("handle") or ""
         if _BRAND_PALETTE:
             print(
                 f"[carrossel] paleta do DB ({len(_BRAND_PALETTE)} cores)",
