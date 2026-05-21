@@ -46,8 +46,10 @@ export default async function CarrosseisPage() {
   try {
     carrosseis = await listCarrosseis();
   } catch (e) {
-    dbError =
-      "Tabela 'carrosseis' não existe ainda. Rode a migration 20260520_carrosseis.sql no Supabase.";
+    // Mostra a causa REAL (antes era um texto fixo de "rode a migration"
+    // que mascarava erro de conexão, projeto pausado, RLS, etc.).
+    const msg = e instanceof Error ? e.message : String(e);
+    dbError = `Não consegui carregar os carrosséis: ${msg}`;
   }
 
   // Mapa slug -> handle pra rotular a marca (inclui marcas novas, nao so
