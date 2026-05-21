@@ -16,7 +16,7 @@ import {
 } from "@/lib/sindicompany/carrosseis";
 import { describeError } from "@/lib/sindicompany/errors";
 import { dispatchGenerateCarrossel } from "@/lib/sindicompany/engine";
-import { listMarcas } from "@/lib/sindicompany/marcas-db";
+import { getMarca, listMarcas } from "@/lib/sindicompany/marcas-db";
 import {
   buildCarrosselPromptSafe,
   generateImage,
@@ -357,6 +357,32 @@ export async function generateFotoCapaWithAI(input: {
     if (cena.ok) subject = cena.sceneEn;
   }
 
+  // Orientacao de cor da foto de capa puxa a PALETA DA MARCA (cadastro).
+  // Sem paleta no DB -> fallback historico (pastels Sindicompany).
+  const marca = await getMarca(carrossel.brand ?? "sindicompanybr");
+  function paletteGuidance(): string {
+    const pal = marca?.paleta;
+    if (!pal) {
+      return (
+        `Color palette MUST be dominated by soft brand pastels: ` +
+        `mint cyan #84C7D3, warm sand beige #DABDA9, soft lavender #B8C0FF, ` +
+        `pure white #FFFFFF and very light gray #F4F4F5. Walls, clothing, ` +
+        `furniture, plants and ambient light should pull toward this airy, ` +
+        `low-saturation pastel range. Avoid heavy reds, oranges, dark blues, ` +
+        `forest greens or saturated primaries. `
+      );
+    }
+    const cores = [pal.mint, pal.sand, pal.lavender, pal.purple, pal.gray_5, pal.white]
+      .filter(Boolean)
+      .join(", ");
+    return (
+      `Color palette should be dominated by the brand colors: ${cores}. ` +
+      `Walls, clothing, furniture, plants and ambient light should pull toward ` +
+      `this brand range — harmonious, editorial, low-saturation. Avoid garish ` +
+      `saturated primaries and colors that clash with this palette. `
+    );
+  }
+
   function buildPrompt(scene: string): string {
     return scene
       ? `Ultra-realistic editorial photograph, 8K quality, hyper-detailed, ` +
@@ -366,12 +392,7 @@ export async function generateFotoCapaWithAI(input: {
         `building setting, professional DSLR camera, natural daylight, shallow ` +
         `depth of field, sharp focus on subject, photorealistic textures, ` +
         `crisp details on every surface, no text, no logos. ` +
-        `Color palette MUST be dominated by Sindicompany brand pastels: ` +
-        `mint cyan #84C7D3, warm sand beige #DABDA9, soft lavender #B8C0FF, ` +
-        `pure white #FFFFFF and very light gray #F4F4F5. Walls, clothing, ` +
-        `furniture, plants and ambient light should pull toward this airy, ` +
-        `low-saturation pastel range. Avoid heavy reds, oranges, dark blues, ` +
-        `forest greens or saturated primaries. ` +
+        paletteGuidance() +
         `Composition: subject occupies the TOP HALF of the frame; bottom half ` +
         `is calmer (sky, wall, blurred background) so 50% of the image can be ` +
         `covered by a text overlay added later.`
