@@ -25,6 +25,9 @@ export interface Marca {
   /** Frase de fechamento da legenda. */
   assinatura: string | null;
   temasSugeridos: string[] | null;
+  /** Cores da marca (chaves: onix, mint, sand, lavender, purple, white,
+   *  gray_5 — mesmas que o template do engine usa). null = usa o tema base. */
+  paleta: Record<string, string> | null;
 }
 
 interface MarcaRow {
@@ -40,6 +43,7 @@ interface MarcaRow {
   persona: string | null;
   assinatura: string | null;
   temas_sugeridos: string[] | null;
+  paleta: Record<string, string> | null;
 }
 
 function fromRow(r: MarcaRow): Marca {
@@ -56,6 +60,7 @@ function fromRow(r: MarcaRow): Marca {
     persona: r.persona,
     assinatura: r.assinatura,
     temasSugeridos: r.temas_sugeridos,
+    paleta: r.paleta,
   };
 }
 
@@ -91,6 +96,7 @@ export interface MarcaInput {
   persona?: string | null;
   assinatura?: string | null;
   temasSugeridos?: string[] | null;
+  paleta?: Record<string, string> | null;
 }
 
 export async function createMarca(input: MarcaInput): Promise<Marca> {
@@ -109,6 +115,7 @@ export async function createMarca(input: MarcaInput): Promise<Marca> {
       persona: input.persona ?? null,
       assinatura: input.assinatura ?? null,
       temas_sugeridos: input.temasSugeridos ?? null,
+      paleta: input.paleta ?? null,
     })
     .select()
     .single();
@@ -134,6 +141,7 @@ export async function updateMarca(
   if (patch.persona !== undefined) row.persona = patch.persona;
   if (patch.assinatura !== undefined) row.assinatura = patch.assinatura;
   if (patch.temasSugeridos !== undefined) row.temas_sugeridos = patch.temasSugeridos;
+  if (patch.paleta !== undefined) row.paleta = patch.paleta;
   const { error } = await supabase.from(TABLE).update(row).eq("slug", slug);
   if (error) throw new Error(error.message);
 }

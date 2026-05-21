@@ -25,6 +25,21 @@ function lines(fd: FormData, k: string): string[] {
     .filter(Boolean);
 }
 
+// Chaves de cor que o template do engine usa.
+const PALETA_KEYS = ["onix", "mint", "sand", "lavender", "purple", "white", "gray_5"];
+
+// Monta o objeto de paleta a partir dos inputs paleta_<chave>. So aceita
+// HEX #rrggbb; chave invalida/vazia e descartada. Vazio -> null (usa o tema
+// base no engine).
+function paletaFromForm(fd: FormData): Record<string, string> | null {
+  const out: Record<string, string> = {};
+  for (const k of PALETA_KEYS) {
+    const v = s(fd, `paleta_${k}`).toLowerCase();
+    if (/^#[0-9a-f]{6}$/.test(v)) out[k] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 // slug url-safe: minusculas, sem acento, so [a-z0-9-]
 function normalizeSlug(raw: string): string {
   return raw
@@ -64,6 +79,7 @@ export async function criarMarcaAction(formData: FormData): Promise<void> {
       persona: s(formData, "persona") || null,
       assinatura: s(formData, "assinatura") || null,
       temasSugeridos: lines(formData, "temas"),
+      paleta: paletaFromForm(formData),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha ao criar marca.";
@@ -98,6 +114,7 @@ export async function atualizarMarcaAction(formData: FormData): Promise<void> {
       persona: s(formData, "persona") || null,
       assinatura: s(formData, "assinatura") || null,
       temasSugeridos: lines(formData, "temas"),
+      paleta: paletaFromForm(formData),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha ao salvar.";
