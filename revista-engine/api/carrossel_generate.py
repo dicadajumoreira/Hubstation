@@ -1257,6 +1257,16 @@ FORMATO_INSTRUCOES = {
         "- Troca curta de falas entre dois personagens, falantes nomeados no inicio (ex: body 'Morador: Mas e rapidinho.' / proximo 'Sindico: Todo problema comeca com rapidinho.').\n"
         "- Escalada emocional e PUNCH na ultima fala. Leitura rapida, humana. Nao citar condominio/unidade. CTA de identificacao."
     ),
+    "desabafo": (
+        "FORMATO: DESABAFO CONTROLADO (emocional, intimo).\n"
+        "- Mostra a dor/pressao real de quem gere — vulnerabilidade CONTROLADA, sem vitimismo.\n"
+        "- Tom intimo, humano, de quem entende por dentro; cria comunidade (ex: 'Tem dia que o sindico so queria desligar o celular.'). Termina em reflexao/frase forte. CTA emocional."
+    ),
+    "escalada": (
+        "FORMATO: A ESCALADA (tensao crescente, cinematografico).\n"
+        "- Comeca numa situacao simples e PIORA a cada slide (caos crescente) ate um pico, depois reflexao final.\n"
+        "- Cada slide eleva a tensao do anterior; prende ate o fim. Use micro-tensao. CTA de debate ou identificacao."
+    ),
 }
 
 
@@ -1527,6 +1537,8 @@ FORMATO_LABELS = {
     "bastidor": "Bastidor Real",
     "camada_invisivel": "Camada Invisível",
     "dialogo": "Diálogo",
+    "desabafo": "Desabafo",
+    "escalada": "A Escalada",
 }
 
 

@@ -137,6 +137,16 @@ const FORMATO_INSTRUCOES: Record<string, string> = {
     `- Troca curta de falas entre dois personagens, com os falantes nomeados no início de cada fala (ex: body "Morador: Mas é rapidinho." / próximo slide body "Síndico: Todo problema começa com rapidinho.").\n` +
     `- Escalada emocional e um PUNCH na última fala. Leitura rápida, humana, ótima pra print.\n` +
     `- NÃO usar nome de condomínio nem nº de unidade. CTA de identificação.`,
+  desabafo:
+    `FORMATO: DESABAFO CONTROLADO (emocional, íntimo).\n` +
+    `- Mostra a dor/pressão real de quem gere — vulnerabilidade CONTROLADA, sem vitimismo nem drama.\n` +
+    `- Tom íntimo, humano, de quem entende por dentro; cria comunidade e pertencimento (ex: "Tem dia que o síndico só queria desligar o celular.").\n` +
+    `- Termina em reflexão/frase forte. CTA emocional ou de identificação.`,
+  escalada:
+    `FORMATO: A ESCALADA (tensão crescente, cinematográfica).\n` +
+    `- Começa numa situação simples e PIORA a cada slide (caos crescente) até um pico emocional, depois uma reflexão final.\n` +
+    `- Cada slide eleva a tensão do anterior — ritmo forte que prende até o fim (ex: comunicado ignorado → conflito → grupo explode → assembleia vira guerra).\n` +
+    `- Use micro-tensão entre os slides. CTA de debate ou identificação.`,
 };
 
 interface ChatOk {
