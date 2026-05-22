@@ -1232,6 +1232,31 @@ FORMATO_INSTRUCOES = {
         "- Quase todos os slides sao tipo 'frase' (limpo/centralizado). Nada de paragrafo. 1 ideia por slide.\n"
         "- Pensado pra print/repost e branding. CTA leve de compartilhamento."
     ),
+    "expectativa_realidade": (
+        "FORMATO: EXPECTATIVA VS REALIDADE (humor + identificacao).\n"
+        "- Capa apresenta a EXPECTATIVA idealizada; os slides mostram a REALIDADE absurda/caotica, com humor leve.\n"
+        "- Contraste forte e identificavel. Otimo pra meme. Fechamento com reflexao leve. CTA de compartilhamento."
+    ),
+    "erro_fatal": (
+        "FORMATO: ERRO FATAL (medo de errar).\n"
+        "- Capa nomeia O erro que custa caro (ex: 'O erro que destroi assembleias').\n"
+        "- Mostra a consequencia, AMPLIFICA o prejuizo, entrega a solucao pratica. Ativa medo + utilidade. CTA de salvar."
+    ),
+    "bastidor": (
+        "FORMATO: BASTIDOR REAL (documental, humaniza).\n"
+        "- Mostra o bastidor real (visita tecnica, reuniao dificil, vistoria) + um DETALHE INVISIVEL que so quem vive percebe.\n"
+        "- Tom de quem esta dentro, percepcao premium. Termina em reflexao/frase forte. CTA de identificacao ou autoridade."
+    ),
+    "camada_invisivel": (
+        "FORMATO: CAMADA INVISIVEL (profundidade emocional).\n"
+        "- Parte de uma situacao comum e revela a CAMADA emocional escondida (ex: 'muita reclamacao nasce do cansaco').\n"
+        "- Provoca o 'nunca pensei nisso'. Verdade humana + frase memoravel. CTA emocional/de compartilhamento."
+    ),
+    "dialogo": (
+        "FORMATO: DIALOGO (conversa).\n"
+        "- Troca curta de falas entre dois personagens, falantes nomeados no inicio (ex: body 'Morador: Mas e rapidinho.' / proximo 'Sindico: Todo problema comeca com rapidinho.').\n"
+        "- Escalada emocional e PUNCH na ultima fala. Leitura rapida, humana. Nao citar condominio/unidade. CTA de identificacao."
+    ),
 }
 
 
@@ -1497,6 +1522,11 @@ FORMATO_LABELS = {
     "hook_punch": "Hook Punch",
     "pov": "POV",
     "tweet": "Tweet",
+    "expectativa_realidade": "Expectativa vs Realidade",
+    "erro_fatal": "Erro Fatal",
+    "bastidor": "Bastidor Real",
+    "camada_invisivel": "Camada Invisível",
+    "dialogo": "Diálogo",
 }
 
 
