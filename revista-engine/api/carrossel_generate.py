@@ -1370,7 +1370,7 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"- ARCO EMOCIONAL (por nº de slides): construa um arco sem meio morno — hook -> amplificacao da dor -> situacao/identificacao -> verdade incomoda -> consequencia -> novo olhar/solucao -> frase memoravel -> CTA, encaixando em {n_slides} slides. Alterne o tom (tensao, identificacao, reflexao); nunca o mesmo por varios slides. Use MINI PLOT TWIST quando couber ('parecia X. Nunca foi sobre X. Era sobre Y.').\n"
         f"- VOZ HUMANA: frases falaveis, ritmo oral, sem juridiques nem academiques. EFEITO ESPELHO: ao menos 1 frase que faca pensar 'isso sou eu'. AUTORIDADE INVISIVEL: nunca dizer 'somos referencia'; a autoridade aparece na clareza e na observacao humana.\n"
         f"- Cada slide interno: tipo + titulo (3-7 palavras) + body (1-3 frases curtas, max 35 palavras).\n"
-        f"- MICRO-TENSAO (retencao entre slides): os slides do MEIO terminam com um gancho que puxa o proximo (curiosidade, tensao, continuacao), nunca 100% fechados. Ex: 'Mas o problema comeca depois.', 'E e aqui que a gestao perde autoridade.', 'So que quase ninguem percebe isso.', 'Mas o pior ainda vem.'. Evite explicacao tecnica continua e slides conclusivos no meio. So o ULTIMO slide (CTA) e a frase final memoravel podem fechar.\n"
+        f"- MICRO-TENSAO (retencao entre slides): os slides do MEIO terminam com um gancho que puxa o proximo (curiosidade, tensao, continuacao), nunca 100% fechados. Marque a frase de tensao/cliffhanger entre ~~ ~~ (vira SUBLINHADO, distinto do grifo do [[ ]]) — ex: '~~Mas o problema comeca depois.~~'. Evite explicacao tecnica continua e slides conclusivos no meio. So o ULTIMO slide (CTA) e a frase final memoravel podem fechar.\n"
         f"- VERDADE HUMANA (o que MAIS viraliza): condominio e comportamento humano. Prefira observacoes reais da vida que facam pensar 'isso e MUITO verdade' a explicacao tecnica. Ex: 'O problema raramente comeca no problema.', 'Sindico forte tambem cansa.', 'O grupo do WhatsApp muda o comportamento das pessoas.'.\n"
         f"- FRASE PRINTAVEL + INDIRETA SOCIAL: inclua ao menos 1 frase digna de print/repost, forte e memoravel (ex: 'Condominio nao funciona no grito. Funciona no processo.'). Vale a indireta (parece reflexao, e indireta): 'Tem morador que quer regra. Ate a regra chegar nele.'.\n"
         f"- RESPIRO VISUAL (ritmo): alterne slides densos e leves; NUNCA todos com a mesma densidade. Inclua ao menos 1 slide com tipo 'frase': SO uma frase curta e memoravel, com body vazio — vai num layout limpo e centralizado.\n"
@@ -7453,15 +7453,18 @@ def _slide_html(
 
 def _h(s: str) -> str:
     esc = (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    # Marcador [[...]] -> destaque generico (.hl, estilo injetado
-    # globalmente no render). Cobre TODOS os templates (capa classica,
-    # internos e os ~20 arquetipos) sem editar cada um, pra qualquer marca
-    # atual ou futura. Texto sem marcador nao muda.
-    return _HOOK_PATTERN.sub(r'<span class="hl">\1</span>', esc)
+    # Marcadores -> destaque (estilos .hl/.tns-hl injetados globalmente no
+    # render). Cobrem TODOS os templates (capa, internos, ~20 arquetipos)
+    # sem editar cada um, pra qualquer marca. Texto sem marcador nao muda.
+    #   [[...]]  -> grifo/marca-texto (.hl)        : hook, ancora, palavra magnetica
+    #   ~~...~~  -> sublinhado forte (.tns-hl)      : frase de TENSAO
+    esc = _HOOK_PATTERN.sub(r'<span class="hl">\1</span>', esc)
+    return _TENSION_PATTERN.sub(r'<span class="tns-hl">\1</span>', esc)
 
 
-# Marcador do trecho-chave do hook na capa: WhatsApp [[nao e assembleia]].
+# Marcadores de destaque. [[..]] = grifo; ~~..~~ = sublinhado (tensao).
 _HOOK_PATTERN = re.compile(r"\[\[(.+?)\]\]")
+_TENSION_PATTERN = re.compile(r"~~(.+?)~~")
 
 
 def _h_hook(s: str, enabled: bool, cls: str = "hook-hl") -> str:
@@ -7526,7 +7529,11 @@ _HL_STYLE = (
     "<style>.hl{font-weight:800;"
     "background-image:linear-gradient(transparent 58%,"
     "color-mix(in srgb, currentColor 22%, transparent) 58%);"
-    "background-repeat:no-repeat;border-radius:4px}</style>"
+    "background-repeat:no-repeat;border-radius:4px}"
+    # Tensao: sublinhado forte na cor do proprio texto (distinto do grifo).
+    ".tns-hl{font-weight:700;text-decoration:underline;"
+    "text-decoration-thickness:0.09em;text-underline-offset:0.12em;"
+    "text-decoration-skip-ink:none}</style>"
 )
 
 
@@ -7831,8 +7838,9 @@ def _humanizer_pass(
         "de alto impacto (verdade incomoda, identificacao, tensao, frase "
         "memoravel ou palavra-chave forte) — no maximo 2 por slide; (3) no "
         "ultimo slide (CTA), a ACAO principal. Esses [[ ]] viram o DESTAQUE "
-        "VISUAL da arte, entao TODO carrossel precisa te-los. Nunca marque a "
-        "legenda.\n\n"
+        "VISUAL da arte, entao TODO carrossel precisa te-los. PRESERVE tambem "
+        "os marcadores ~~ ~~ (frase de tensao -> sublinhado) exatamente onde "
+        "vierem. Nunca marque a legenda.\n\n"
         "Devolva JSON estrito (sem markdown, sem comentários):\n"
         '{"slides":[{"i":0,"tipo":"capa","titulo":"...","body":"..."},...],'
         '"legenda":"..."}\n\n'
@@ -7883,18 +7891,22 @@ def _humanizer_pass(
             # destaque mesmo quando o GPT ignora a regra de preservar.
             if isinstance(titulo, str) and titulo.strip():
                 new_t = _apply_accent_dict(titulo)
-                if str(s.get("titulo") or "").count("[[") > new_t.count("[["):
+                old_t = str(s.get("titulo") or "")
+                if (old_t.count("[[") > new_t.count("[[")
+                        or old_t.count("~~") > new_t.count("~~")):
                     print(
-                        f"[carrossel] humanizer dropou [[ ]] no titulo {i}; mantendo original",
+                        f"[carrossel] humanizer dropou destaque no titulo {i}; mantendo original",
                         flush=True,
                     )
                 else:
                     s["titulo"] = new_t
             if isinstance(body, str):
                 new_b = _apply_accent_dict(body)
-                if str(s.get("body") or "").count("[[") > new_b.count("[["):
+                old_b = str(s.get("body") or "")
+                if (old_b.count("[[") > new_b.count("[[")
+                        or old_b.count("~~") > new_b.count("~~")):
                     print(
-                        f"[carrossel] humanizer dropou [[ ]] no body {i}; mantendo original",
+                        f"[carrossel] humanizer dropou destaque no body {i}; mantendo original",
                         flush=True,
                     )
                 else:
@@ -7972,12 +7984,14 @@ def _ensure_hooks(slides: list[dict[str, Any]]) -> list[dict[str, Any]]:
         is_capa = tipo == "capa" or i == 0
         is_cta = tipo == "cta" or i == total - 1
         is_frase = tipo in ("frase", "respiro", "quote")
+        # Considera [[ ]] (grifo) E ~~ ~~ (tensao) como "ja tem destaque".
         if is_capa:
-            if "[[" not in (s.get("titulo") or ""):
-                s["titulo"] = _auto_hook(s.get("titulo") or "")
+            t = s.get("titulo") or ""
+            if "[[" not in t and "~~" not in t:
+                s["titulo"] = _auto_hook(t)
         elif not is_cta and not is_frase:
             body = s.get("body") or ""
-            if body.strip() and "[[" not in body:
+            if body.strip() and "[[" not in body and "~~" not in body:
                 s["body"] = _auto_hook(body)
     return slides
 

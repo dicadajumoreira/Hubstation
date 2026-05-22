@@ -15,19 +15,26 @@ export const revalidate = 0;
 
 const ANGULOS = ["Emocional", "Informativa", "Provocativa"];
 
-// Renderiza o titulo destacando o trecho do hook marcado com [[...]] —
-// mostra ao editor o que vai virar destaque visual na capa (e remove os
-// colchetes). Fora da capa, normalmente nao ha marcador.
+// Mostra ao editor o que vira destaque visual: [[..]] = grifo, ~~..~~ =
+// sublinhado (tensao). Remove os marcadores do texto exibido.
 function renderHook(text: string) {
-  return text.split(/\[\[(.+?)\]\]/).map((part, i) =>
-    i % 2 === 1 ? (
-      <mark key={i} className="bg-mint-200 text-onix-900 rounded px-0.5">
-        {part}
-      </mark>
-    ) : (
-      part
-    ),
-  );
+  return text.split(/(\[\[.+?\]\]|~~.+?~~)/g).map((part, i) => {
+    const hl = part.match(/^\[\[(.+?)\]\]$/);
+    if (hl)
+      return (
+        <mark key={i} className="bg-mint-200 text-onix-900 rounded px-0.5">
+          {hl[1]}
+        </mark>
+      );
+    const tn = part.match(/^~~(.+?)~~$/);
+    if (tn)
+      return (
+        <span key={i} className="underline decoration-2 underline-offset-2">
+          {tn[1]}
+        </span>
+      );
+    return part;
+  });
 }
 
 export default async function EscolherCopyPage({
