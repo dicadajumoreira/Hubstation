@@ -7065,7 +7065,7 @@ def _slide_html(
     titulo_color = _pick_title_color(bg_color, fg_color, p)
 
     body_html = (
-        f'<p class="slide-body">{_h_hook(body, is_consvicta, "body-hl")}</p>'
+        f'<p class="slide-body">{_h_hook(body, is_consvicta, "cta-acao" if is_cta else "body-hl")}</p>'
         if body
         else ""
     )
@@ -7297,6 +7297,19 @@ def _slide_html(
     background-repeat: no-repeat;
     border-radius: 4px;
   }}
+  /* CTA: acao marcada vira BOTAO/caixa (cor da marca + texto contrastante
+     + seta leve) — parece acionavel, nunca escondido. */
+  .cta-acao {{
+    display: inline-block;
+    background: {accent};
+    color: {accent_text};
+    font-weight: {600 if is_consvicta else 800};
+    padding: 14px 40px;
+    border-radius: 999px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.14);
+    white-space: nowrap;
+  }}
+  .cta-acao::after {{ content: " \\2192"; }}
   /* Para palavras destacadas dentro do body — 55-70 display
      (mid 62 -> 176 css). Use <span class="destaque">…</span>. */
   .destaque {{
