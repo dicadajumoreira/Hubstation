@@ -53,6 +53,64 @@ def gradient_css(name: str, angle: int = 135) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Patterns de canto (watermark discreto) — petalas em quarto de circulo
+# ---------------------------------------------------------------------------
+# PNGs pre-coloridos por cor da paleta em assets/patterns/sindicompany/.
+# Usados como decoracao de canto em baixa opacidade (regra do brandbook:
+# "Cantos solo para watermarks discretos (TR ou BL)").
+
+CORNER_PATTERNS = {
+    "navy": "canto-navy.png",
+    "cyan": "canto-cyan.png",
+    "beige": "canto-beige.png",
+    "lavender": "canto-lavender.png",
+    "purple": "canto-purple.png",
+}
+
+_PATTERN_CACHE: dict[str, str] = {}
+
+
+def _pattern_data_url(filename: str) -> str:
+    if filename in _PATTERN_CACHE:
+        return _PATTERN_CACHE[filename]
+    here = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(here, "assets", "patterns", "sindicompany", filename)
+    try:
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("ascii")
+        url = f"data:image/png;base64,{b64}"
+    except Exception as e:  # noqa: BLE001
+        print(f"[brand_kit] pattern {filename} nao carregou: {e}", flush=True)
+        url = ""
+    _PATTERN_CACHE[filename] = url
+    return url
+
+
+def sc_corner_overlay_html(
+    color_name: str,
+    *,
+    opacity: float = 0.10,
+    position: str = "right bottom",
+    size: str = "40%",
+    z: int = 0,
+) -> str:
+    """Div absoluto com o pattern de canto pra decorar um slide. '' se a
+    cor nao existir ou o arquivo faltar."""
+    fn = CORNER_PATTERNS.get(color_name)
+    if not fn:
+        return ""
+    url = _pattern_data_url(fn)
+    if not url:
+        return ""
+    return (
+        f'<div style="position:absolute;inset:0;z-index:{z};'
+        f"pointer-events:none;opacity:{opacity};"
+        f"background-image:url({url});background-repeat:no-repeat;"
+        f'background-position:{position};background-size:{size}"></div>'
+    )
+
+
+# ---------------------------------------------------------------------------
 # Logo recolorivel por mascara (pixel-perfect com o master)
 # ---------------------------------------------------------------------------
 # O simbolo (casas concentricas + ponto) e renderizado via CSS mask-image

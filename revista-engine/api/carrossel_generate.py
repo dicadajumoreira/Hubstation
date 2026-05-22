@@ -7171,6 +7171,20 @@ def _slide_html(
         else ""
     )
 
+    # Brand Kit: watermark de canto (petalas) discreto no topo-direito.
+    # So Sindicompany (Consvicta tem ambient proprio). CTA escuro usa canto
+    # cyan mais visivel; conteudo claro usa navy bem sutil.
+    corner_overlay_div = ""
+    if _BRAND == "sindicompanybr" and not is_frase:
+        if is_cta:
+            corner_overlay_div = brand_kit.sc_corner_overlay_html(
+                "cyan", opacity=0.16, position="right top", size="38%"
+            )
+        else:
+            corner_overlay_div = brand_kit.sc_corner_overlay_html(
+                "navy", opacity=0.08, position="right top", size="36%"
+            )
+
     # Pattern de fundo:
     # - Slides internos: pattern ciclando, tile 800x800, 10% opacity
     # - CTA (ultimo): Consvicta usa picker dark; outras marcas fixam
@@ -7532,6 +7546,7 @@ def _slide_html(
 </style></head>
 <body>
   {pattern_div}
+  {corner_overlay_div}
   {('<div class="ambient-grid"></div><div class="ambient-orb ambient-orb-gold"></div><div class="ambient-orb ambient-orb-tiff"></div>') if is_consvicta else ''}
   {watermark_div_internal}
   {slide_foto_div}
