@@ -1024,9 +1024,12 @@ def _pick_title_color(bg: str, fg: str, p: dict[str, str]) -> str:
     if _contrast(best, bg) >= 3.0:
         return best
     return _adjust_for_contrast(best, bg, 4.0)
-    """Le a marca do Supabase (paleta, bucket_prefix, handle) numa query.
-    Qualquer falha (marca ausente, erro de rede) cai em None -> identidade
-    chumbada. Mantem zero regressao independente do estado do banco."""
+
+
+def _fetch_marca(slug: str) -> dict[str, Any] | None:
+    """Le a marca do Supabase (paleta, bucket_prefix, handle, nome) numa
+    query. Qualquer falha (marca ausente, erro de rede) cai em None ->
+    identidade chumbada. Zero regressao independente do estado do banco."""
     try:
         sb = _sb_client()
         res = (
