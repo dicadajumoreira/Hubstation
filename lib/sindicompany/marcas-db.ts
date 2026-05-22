@@ -49,6 +49,8 @@ export interface Marca {
   paleta: Record<string, string> | null;
   /** Fontes da marca. null = usa as fontes embutidas do engine. */
   tipografia: MarcaTipografia | null;
+  /** Temperatura emocional da copy (0-10). null = neutro. */
+  temperatura: number | null;
 }
 
 interface MarcaRow {
@@ -66,6 +68,7 @@ interface MarcaRow {
   temas_sugeridos: string[] | null;
   paleta: Record<string, string> | null;
   tipografia: MarcaTipografia | null;
+  temperatura: number | null;
 }
 
 function fromRow(r: MarcaRow): Marca {
@@ -84,6 +87,7 @@ function fromRow(r: MarcaRow): Marca {
     temasSugeridos: r.temas_sugeridos,
     paleta: r.paleta,
     tipografia: r.tipografia,
+    temperatura: r.temperatura,
   };
 }
 
@@ -121,6 +125,7 @@ export interface MarcaInput {
   temasSugeridos?: string[] | null;
   paleta?: Record<string, string> | null;
   tipografia?: MarcaTipografia | null;
+  temperatura?: number | null;
 }
 
 export async function createMarca(input: MarcaInput): Promise<Marca> {
@@ -142,6 +147,7 @@ export async function createMarca(input: MarcaInput): Promise<Marca> {
   // So inclui tipografia quando ha fontes — assim criar marca comum nao
   // depende da coluna existir (deploy independente da migration).
   if (input.tipografia != null) row.tipografia = input.tipografia;
+  if (input.temperatura != null) row.temperatura = input.temperatura;
   const { data, error } = await supabase
     .from(TABLE)
     .insert(row)
@@ -171,6 +177,9 @@ export async function updateMarca(
   if (patch.temasSugeridos !== undefined) row.temas_sugeridos = patch.temasSugeridos;
   if (patch.paleta !== undefined) row.paleta = patch.paleta;
   if (patch.tipografia !== undefined) row.tipografia = patch.tipografia;
+  // != null (nao !== undefined): empty/null nao escreve a coluna, entao
+  // editar marca sem temperatura funciona mesmo antes da migration rodar.
+  if (patch.temperatura != null) row.temperatura = patch.temperatura;
   const { error } = await supabase.from(TABLE).update(row).eq("slug", slug);
   if (error) throw new Error(error.message);
 }

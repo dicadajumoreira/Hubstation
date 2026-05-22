@@ -46,6 +46,15 @@ function paletaFromForm(fd: FormData): Record<string, string> | null {
   return Object.keys(out).length ? out : null;
 }
 
+// Temperatura emocional 0-10 (clampa). Vazio/invalido -> null (neutro).
+function temperaturaFromForm(fd: FormData): number | null {
+  const raw = s(fd, "temperatura");
+  if (raw === "") return null;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.min(10, n));
+}
+
 // Le o ZIP de fontes (campo fontes_zip) + os nomes de familia e devolve a
 // tipografia pronta. undefined = nenhum zip enviado (nao mexe na tipografia
 // existente). Lanca Error amigavel em caso de problema no zip.
@@ -110,6 +119,7 @@ export async function criarMarcaAction(formData: FormData): Promise<void> {
       temasSugeridos: lines(formData, "temas"),
       paleta: paletaFromForm(formData),
       tipografia: tipografia ?? null,
+      temperatura: temperaturaFromForm(formData),
     });
     await uploadMarcaAssets(formData, bucketPrefix);
   } catch (e) {
@@ -149,6 +159,7 @@ export async function atualizarMarcaAction(formData: FormData): Promise<void> {
       assinatura: s(formData, "assinatura") || null,
       temasSugeridos: lines(formData, "temas"),
       paleta: paletaFromForm(formData),
+      temperatura: temperaturaFromForm(formData),
       ...(tipografia ? { tipografia } : {}),
     });
     await uploadMarcaAssets(formData, prefix);

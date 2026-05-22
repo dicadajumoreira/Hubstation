@@ -175,6 +175,22 @@ export function MarcaForm({
       </div>
 
       <Field
+        label="Temperatura emocional (0–10)"
+        hint="Intensidade da copy: 0-2 institucional · 3-4 leve · 5-6 emocional · 7-8 provocador · 9-10 extremamente intenso. Vazio = neutro (a persona manda)."
+      >
+        <input
+          type="number"
+          name="temperatura"
+          min={0}
+          max={10}
+          step={1}
+          defaultValue={marca?.temperatura ?? ""}
+          placeholder="ex: 7"
+          className={`${inputCls} max-w-[140px]`}
+        />
+      </Field>
+
+      <Field
         label="Persona (guia de copy)"
         hint="O system prompt da marca: voz, público, tom, o que viraliza, o que nunca fazer. É o que dirige o copy gerado."
       >
