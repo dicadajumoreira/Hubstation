@@ -8076,6 +8076,39 @@ def _ensure_hooks(slides: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return slides
 
 
+# Heuristica: o ultimo slide ja tem CTA? (verbo de acao ou pergunta no fim)
+_CTA_RX = re.compile(
+    r"comenta|salv[ae]|compartilh|manda|marca\b|segue|chama|link na bio|"
+    r"merece|responde|\?\s*$",
+    re.IGNORECASE,
+)
+_CTA_DEFAULTS = {
+    "comentarios": "[[Comenta]] o que você faria.",
+    "salvamentos": "[[Salva esse post]] pra usar depois.",
+    "clientes": "[[Chama a gente]] pra resolver isso.",
+    "autoridade": "[[Compartilha]] com quem precisa ver.",
+    "educar": "[[Salva esse post]] pra não esquecer.",
+}
+
+
+def _ensure_cta(
+    slides: list[dict[str, Any]], objetivo: str
+) -> list[dict[str, Any]]:
+    """Garante uma chamada para acao no ULTIMO slide. Se ele nao tiver CTA
+    (modelo as vezes termina so com frase memoravel), adiciona um default
+    por objetivo. Deterministico — o CTA NUNCA mais some."""
+    if not slides:
+        return slides
+    last = slides[-1]
+    txt = f"{last.get('titulo') or ''} {last.get('body') or ''}"
+    if _CTA_RX.search(txt):
+        return slides  # ja tem CTA (nao duplica)
+    cta = _CTA_DEFAULTS.get((objetivo or "").strip().lower(), "[[Salva esse post]].")
+    body = str(last.get("body") or "").rstrip()
+    last["body"] = (body + " " + cta).strip() if body else cta
+    print(f"[carrossel] CTA ausente no ultimo slide; adicionado default", flush=True)
+    return slides
+
 
 def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
@@ -8202,6 +8235,9 @@ def gerar_carrossel(carrossel_id: str) -> int:
         # todo slide que ficou sem (deterministico, sem LLM). Ultima etapa
         # de texto antes do render — o destaque NUNCA mais falta.
         slides = _ensure_hooks(slides)
+        # Garante CTA no ultimo slide (deterministico) — o modelo as vezes
+        # termina so com frase memoravel; aqui o CTA nunca mais some.
+        slides = _ensure_cta(slides, str(carrossel.get("objetivo") or ""))
         print(
             f"[carrossel] ensure-hooks: "
             f"{sum(1 for s in slides if '[[' in (s.get('titulo') or '') or '[[' in (s.get('body') or ''))}"
