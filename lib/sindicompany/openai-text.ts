@@ -14,9 +14,9 @@ const FORMATO_INSTRUCOES: Record<string, string> = {
   historia_real:
     `FORMATO: HISTÓRIA REAL (o que mais engaja e salva).\n` +
     `- Dê um NOME PRÓPRIO ao personagem (use o nome indicado abaixo no briefing), nunca "um morador".\n` +
-    `- Detalhes concretos tornam crível: "6 kg", "4 horas", "23%". Se citar unidade/apartamento, VARIE o número a cada roteiro — nunca repita sempre o mesmo.\n` +
+    `- Detalhes concretos tornam crível: "6 kg", "4 horas", "23%". NUNCA cite número de apartamento/unidade.\n` +
     `- A história tem virada: setup → conflito → descoberta → resolução.\n` +
-    `- Personagens/situações podem ser compostos. NUNCA invente condomínios ou endereços reais.\n` +
+    `- Personagens/situações podem ser compostos. NUNCA cite nome de condomínio (real ou inventado), endereço, nem número de unidade/apartamento.\n` +
     `ESTRUTURA DE SLIDES:\n` +
     `  1 (capa): hook — o momento de tensão máxima, sem resolver. + tarja FORMATO.\n` +
     `  2: quem é o personagem e qual o problema.\n` +
@@ -309,6 +309,7 @@ export async function gerarTresCopies(input: {
     `REGRAS:\n` +
     `- Capa: o tema "${input.tema}" aparece literal ou em paráfrase clara. Capa inteira (titulo + body) tem no máximo 20 palavras.\n` +
     `- Cada slide interno: tipo + título (3-7 palavras) + body (1-3 frases curtas, máx 35 palavras). Seja conciso — não encha linguiça.\n` +
+    `- NUNCA cite número de apartamento/unidade nem nome de condomínio (real ou inventado) em nenhum slide ou legenda. Personagem e situação ficam sem identificar prédio ou unidade.\n` +
     `- Em posts educativos (mito, dado, tutorial, lista jurídica): pelo menos UMA âncora — artigo (ex: "Código Civil, art. 1.336"), decisão judicial (ex: "STJ, REsp 1.699.022/SP, 2019") OU dado com fonte nomeada e datada.\n` +
     antiLeak +
     `- LEGENDA Instagram: 4-8 linhas, hook na primeira, termina OBRIGATORIAMENTE com "${assinatura}" e EXATAMENTE 3 hashtags na linha seguinte (uma da marca + 2 do tema).\n` +
