@@ -7909,6 +7909,65 @@ def _humanizer_pass(
 # =============================================================================
 
 
+def _auto_hook(text: str) -> str:
+    """Garante UM destaque [[ ]] num texto que nao tem nenhum, de forma
+    deterministica (sem LLM). Heuristica: destaca a ultima clausula (apos
+    virgula/;/:) se for curta, senao os ultimos ~60% das palavras (2 a 6),
+    sem engolir a pontuacao final. Usado como rede de seguranca final pra
+    o destaque NUNCA faltar."""
+    t = (text or "").strip()
+    if not t or "[[" in t:
+        return text
+    # Considera so a ULTIMA sentenca como base (o "payoff"); preserva as
+    # anteriores fora do destaque pra nao grifar atravessando o ponto.
+    sents = re.split(r"(?<=[.!?])\s+", t)
+    if len(sents) > 1 and len(sents[-1].split()) >= 2:
+        prefix = t[: t.rfind(sents[-1])]
+        base = sents[-1]
+    else:
+        prefix = ""
+        base = t
+    words = base.split()
+    if len(words) < 2:
+        return text
+    m = re.search(r"[,;:]\s+([^,;:]{3,})$", base)
+    if m and 2 <= len(m.group(1).split()) <= 7:
+        head = base[: m.start(1)]
+        tail = m.group(1)
+    else:
+        n = max(2, min(6, round(len(words) * 0.6)))
+        head = " ".join(words[:-n])
+        head = (head + " ") if head else ""
+        tail = " ".join(words[-n:])
+    pm = re.match(r"^(.*?)([.!?,;:]*)$", tail.strip())
+    core, punct = pm.group(1), pm.group(2)
+    if not core:
+        return text
+    return f"{prefix}{head}[[{core}]]{punct}"
+
+
+def _ensure_hooks(slides: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Rede de seguranca FINAL (apos humanizer + sanitizer): se um slide
+    ainda nao tem [[ ]], adiciona deterministicamente. Capa garante o hook
+    no titulo; slides de conteudo garantem 1 ancora no body. CTA e slides
+    'frase'/respiro sao deixados pro modelo (nao forca)."""
+    total = len(slides)
+    for i, s in enumerate(slides):
+        tipo = (s.get("tipo") or "").strip().lower()
+        is_capa = tipo == "capa" or i == 0
+        is_cta = tipo == "cta" or i == total - 1
+        is_frase = tipo in ("frase", "respiro", "quote")
+        if is_capa:
+            if "[[" not in (s.get("titulo") or ""):
+                s["titulo"] = _auto_hook(s.get("titulo") or "")
+        elif not is_cta and not is_frase:
+            body = s.get("body") or ""
+            if body.strip() and "[[" not in body:
+                s["body"] = _auto_hook(body)
+    return slides
+
+
+
 def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
     global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE, _BRAND_PREFIX, _BRAND_HANDLE
@@ -8017,6 +8076,17 @@ def gerar_carrossel(carrossel_id: str) -> int:
         # (se OPENAI_API_KEY disponivel). Regras por marca:
         # handle/assinatura/anti-leak/tom — vide _BRAND_HUMANIZER_RULES.
         slides, legenda = _humanizer_pass(slides, legenda, _BRAND)
+
+        # 1c. Rede de seguranca FINAL do destaque visual: garante [[ ]] em
+        # todo slide que ficou sem (deterministico, sem LLM). Ultima etapa
+        # de texto antes do render — o destaque NUNCA mais falta.
+        slides = _ensure_hooks(slides)
+        print(
+            f"[carrossel] ensure-hooks: "
+            f"{sum(1 for s in slides if '[[' in (s.get('titulo') or '') or '[[' in (s.get('body') or ''))}"
+            f"/{len(slides)} slides com destaque",
+            flush=True,
+        )
 
         # 2. Render + upload de cada slide
         n_total = len(slides)
