@@ -7797,7 +7797,11 @@ def _humanizer_pass(
         f"- ANTI-LEAK: {rules['anti_leak']}\n"
         f"- Assinatura/tagline desta conta: '{rules['assinatura']}' — "
         f"aparece SO na legenda, NUNCA num slide.\n"
-        "- Preserve 'tipo' e 'i' exatamente.\n\n"
+        "- Preserve 'tipo' e 'i' exatamente.\n"
+        "- PRESERVE os marcadores [[ ]] EXATAMENTE como vieram — eles marcam "
+        "o trecho que recebe DESTAQUE VISUAL na arte. NUNCA remova, mova nem "
+        "altere os colchetes; se reescrever a frase, mantenha [[ ]] em volta "
+        "do trecho equivalente. No maximo 2 pares [[ ]] por slide.\n\n"
         "Devolva JSON estrito (sem markdown, sem comentários):\n"
         '{"slides":[{"i":0,"tipo":"capa","titulo":"...","body":"..."},...],'
         '"legenda":"..."}\n\n'
