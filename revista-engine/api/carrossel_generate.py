@@ -31,6 +31,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from api import brand_kit
 from api.supabase_client import _client as _sb_client
 from api.text_gen import _client as _openai_client, MODEL, _gerar_json
 
@@ -6779,18 +6780,37 @@ def _slide_html(
     # @bysindicompany usa LOGO 1 do bucket __by-logos no topo;
     # @consvictabr usa LOGO 1 do bucket __consvicta-logos; @sindicompanybr
     # usa o slot 5 do bucket __logos (logo principal Sindicompany).
-    if _BRAND == "bysindicompany":
-        logo_top_slot = 1
-    elif _BRAND == "consvictabr":
-        logo_top_slot = 1
+    if _BRAND == "sindicompanybr":
+        # Logo recolorivel (Brand Kit): simbolo por mascara + wordmark
+        # Provicali, colorido pelo fundo do slide (capa/CTA escuros ->
+        # branco; conteudo claro -> navy). Substitui o PNG de slot fixo.
+        _bg_dark = (
+            is_capa
+            or (tipo or "").strip().lower() == "cta"
+            or slide_idx == total
+        )
+        _hc, _dc, _wc = brand_kit.pick_logo_colors(_bg_dark, _palette())
+        logo_top_img = brand_kit.sc_logo_horizontal_html(
+            720, _hc, _dc, _wc, klass="logo-top"
+        )
+        if not logo_top_img:  # mascara ausente -> fallback pro slot legado
+            _u = _logo_slot_data_url(5)
+            logo_top_img = (
+                f'<img class="logo-top" src="{_u}" alt="" />' if _u else ""
+            )
     else:
-        logo_top_slot = 5
-    logo_top_url = _logo_slot_data_url(logo_top_slot)
-    logo_top_img = (
-        f'<img class="logo-top" src="{logo_top_url}" alt="" />'
-        if logo_top_url
-        else ""
-    )
+        if _BRAND == "bysindicompany":
+            logo_top_slot = 1
+        elif _BRAND == "consvictabr":
+            logo_top_slot = 1
+        else:
+            logo_top_slot = 5
+        logo_top_url = _logo_slot_data_url(logo_top_slot)
+        logo_top_img = (
+            f'<img class="logo-top" src="{logo_top_url}" alt="" />'
+            if logo_top_url
+            else ""
+        )
 
     if is_capa:
         # Slide 1: foto na metade de cima + texto sobre overlay escuro embaixo

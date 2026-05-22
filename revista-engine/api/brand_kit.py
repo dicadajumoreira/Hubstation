@@ -115,9 +115,61 @@ def sc_symbol_html(
             f'-webkit-mask-image:url({md});mask-image:url({md})"></div>'
         )
     return (
-        f'<div style="position:relative;display:inline-block;'
+        f'<div style="position:relative;display:inline-block;flex-shrink:0;'
         f'width:{size_px}px;height:{h:.1f}px">{houses}{dot_div}</div>'
     )
+
+
+def sc_logo_horizontal_html(
+    width: float,
+    house_color: str,
+    dot_color: str,
+    wordmark_color: str,
+    *,
+    klass: str = "",
+) -> str:
+    """Lockup horizontal: simbolo recolorivel + wordmark 'sindicompany' em
+    Provicali. Proporcoes rastreadas do master (svg-kit.jsx): simbolo=18.3%
+    da largura, fonte=15.8%, gap=0.5%. Provicali precisa estar embutida no
+    <head> (sindicompany-fonts-inline.css). '' se a mascara faltar."""
+    # Proporcoes medidas do master (sindicompany-horizontal-color.png):
+    # simbolo = 18.3% da largura, gap = 0.3%, cap-height do wordmark = 10.6%
+    # -> font-size ~= 15.1% da largura (cap/font ~= 0.7). Largura do container
+    # fica natural (o wordmark define) pra nunca cortar o "y"/®.
+    symbol_size = width * 0.183
+    font_size = width * 0.151
+    gap = width * 0.003
+    sym = sc_symbol_html(symbol_size, house_color, dot_color)
+    if not sym:
+        return ""
+    cls = f' class="{klass}"' if klass else ""
+    return (
+        f'<div{cls} style="display:inline-flex;align-items:center;'
+        f'gap:{gap:.1f}px;">'
+        f"{sym}"
+        f"<span style=\"font-family:'Provicali','Epilogue',system-ui,sans-serif;"
+        f"font-style:normal;font-weight:400;font-size:{font_size:.1f}px;"
+        f"color:{wordmark_color};letter-spacing:-0.02em;line-height:0.85;"
+        f"display:inline-flex;align-items:flex-start;"
+        f'margin-top:{symbol_size * 0.04:.1f}px;white-space:nowrap;">'
+        f"sindicompany"
+        f"<sup style=\"font-size:0.18em;font-family:'Epilogue',sans-serif;"
+        f'font-weight:500;margin-top:0.4em;margin-left:0.1em;">&#174;</sup>'
+        f"</span></div>"
+    )
+
+
+def pick_logo_colors(bg_is_dark: bool, p: dict) -> tuple[str, str, str]:
+    """(casas, ponto, wordmark) do lockup conforme o fundo do slide.
+    Fundo escuro -> tudo branco + ponto beige; fundo claro/colorido ->
+    tudo navy + ponto beige. Mono por segurança de leitura sobre os
+    fundos variados dos slides de conteudo."""
+    beige = p.get("sand", "#E0B098")
+    if bg_is_dark:
+        white = p.get("white", "#FFFFFF")
+        return white, beige, white
+    navy = p.get("onix", "#182028")
+    return navy, beige, navy
 
 
 def pick_symbol_colors(bg_is_dark: bool, p: dict) -> tuple[str, str]:
