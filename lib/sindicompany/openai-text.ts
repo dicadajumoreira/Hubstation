@@ -308,6 +308,8 @@ export async function gerarTresCopies(input: {
     `ESTRUTURA: use o FORMATO acima e EXATAMENTE ${input.n_slides} slides. Se a persona sugerir outra contagem/estrutura, o FORMATO e a quantidade de slides deste post MANDAM.\n\n` +
     `REGRAS:\n` +
     `- Capa: o tema "${input.tema}" aparece literal ou em paráfrase clara. Capa inteira (titulo + body) tem no máximo 20 palavras.\n` +
+    `- HOOK DA CAPA (prioridade máxima): o título da capa é a frase que PARA O SCROLL — verdade incômoda, identificação, tensão ou curiosidade. Curto, leitura instantânea no celular. NUNCA slogan corporativo, frase genérica ou que começa devagar; deve funcionar sozinho, sem depender de contexto.\n` +
+    `- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: "WhatsApp [[não é assembleia]].", "O síndico cansado começa a [[perder autoridade]].". Marque [[ ]] APENAS no título da capa (slide 1), nunca nos outros slides nem na legenda.\n` +
     `- Cada slide interno: tipo + título (3-7 palavras) + body (1-3 frases curtas, máx 35 palavras). Seja conciso — não encha linguiça.\n` +
     `- NUNCA cite número de apartamento/unidade nem nome de condomínio (real ou inventado) em nenhum slide ou legenda. Personagem e situação ficam sem identificar prédio ou unidade.\n` +
     `- Em posts educativos (mito, dado, tutorial, lista jurídica): pelo menos UMA âncora — artigo (ex: "Código Civil, art. 1.336"), decisão judicial (ex: "STJ, REsp 1.699.022/SP, 2019") OU dado com fonte nomeada e datada.\n` +
