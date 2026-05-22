@@ -415,8 +415,8 @@ export async function gerarTresCopies(input: {
   // tom de cada um conforme a marca.
   const angulos = [
     "Recorte 1: o ângulo mais humano/emocional do tema — identificação, dor real, bastidor.",
-    "Recorte 2: o ângulo de processo/governança/dados — o lado técnico e organizacional.",
-    "Recorte 3: o ângulo da transformação — o que muda quando a gestão é profissional.",
+    "Recorte 2: o ângulo prático/técnico do tema — como funciona, o que fazer, dados.",
+    "Recorte 3: o ângulo da transformação — o que muda quando se faz do jeito certo.",
   ];
 
   const buildPrompt = (angulo: string): string => {
@@ -429,6 +429,7 @@ export async function gerarTresCopies(input: {
     return (
     `Crie UMA versão de copy pra um carrossel do ${handle}.\n` +
     `A VOZ, o público, o tom e o que pode/não pode estão no system prompt (a persona da marca) — SIGA À RISCA.\n` +
+    `UNIVERSO DA MARCA (REGRA INEGOCIÁVEL): TODO o conteúdo é sobre o nicho de ${marca?.nome ?? handle}${marca?.nicho ? ` — ${marca.nicho}` : ""}. Trate o tema "${input.tema}" SEMPRE pela ótica e realidade dessa marca. Os exemplos que aparecem neste prompt (síndico, assembleia, condomínio, morador, gestão condominial, etc.) são de OUTRO nicho e servem APENAS pra ilustrar a TÉCNICA — NUNCA copie o assunto deles. NUNCA escreva sobre gestão condominial/síndico/assembleia a menos que a persona desta marca diga explicitamente que ela é desse nicho.\n` +
     objetivoBloco +
     `\nBRIEFING:\n` +
     `- Título interno: ${input.titulo}\n` +

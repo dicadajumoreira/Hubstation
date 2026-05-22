@@ -7862,7 +7862,27 @@ def _humanizer_pass(
         )
         return slides, legenda
 
-    rules = _BRAND_HUMANIZER_RULES.get(brand, _BRAND_HUMANIZER_RULES["sindicompanybr"])
+    # Marca nova: NAO cai nas regras da Sindicompany (handle/tom/assinatura
+    # dela vazariam). Constroi regras dinamicas com o handle/nome reais e um
+    # tom NEUTRO que preserva o nicho da marca — nunca injeta tema
+    # condominial/voz de sindico se o texto nao for disso.
+    rules = _BRAND_HUMANIZER_RULES.get(brand)
+    if rules is None:
+        nome = _BRAND_NAME or _BRAND
+        rules = {
+            "handle": _BRAND_HANDLE or f"@{brand}",
+            "assinatura": "",
+            "anti_leak": (
+                f"A marca aqui e SO {nome}. NAO mencione outras marcas/"
+                "concorrentes (Sindicompany, By Sindicompany, Consvicta)."
+            ),
+            "tom": (
+                f"Mantenha a VOZ e o NICHO de {nome} conforme o conteudo "
+                "recebido. NAO mude de assunto, NAO injete tema condominial, "
+                "sindico, assembleia nem morador a menos que o proprio texto "
+                "ja seja desse nicho."
+            ),
+        }
 
     payload = json.dumps(
         {
