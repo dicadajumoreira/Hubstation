@@ -2706,7 +2706,7 @@ def _capa_hero_portrait(
 </style></head>
 <body>
   {photo_layer}
-  <div class="tag-bar"><span class="tag">PERFIL · SINDICOMPANY</span></div>
+  <div class="tag-bar"><span class="tag">PERFIL · {_brand_label().upper()}</span></div>
   {logo_top_img}
   <div class="beige-box">
     <h1 class="capa-titulo">{_h(titulo)}</h1>
@@ -4643,7 +4643,7 @@ def _capa_portrait_frame(
 </style></head>
 <body>
   {logo_top_img}
-  <div class="tag">PERFIL · SINDICOMPANY</div>
+  <div class="tag">PERFIL · {_brand_label().upper()}</div>
   <div class="frame-wrap">
     <div class="frame-inner">
       {photo_inner}
@@ -5359,7 +5359,7 @@ def _capa_wallpaper(
   {pattern_layer}
   {logo_top_img}
   <div class="card">
-    <span class="card-label">Sindicompany</span>
+    <span class="card-label">{_brand_label()}</span>
     <h1 class="card-titulo">{_h(titulo)}</h1>
     {body_html}
   </div>
@@ -5986,7 +5986,7 @@ def _capa_receipt(
   {logo_top_img}
   <div class="receipt">
     <div class="rec-title">{_h(titulo)}</div>
-    <div class="rec-sub">Sindicompany · Recibo</div>
+    <div class="rec-sub">{_brand_label()} · Recibo</div>
     <div class="rec-divider"></div>
     {items_html}
     {total_block}
@@ -6139,7 +6139,7 @@ def _capa_ribbon(
     Headline Navy gigante centralizada acima/abaixo conforme cabe.
     Capa sem foto por design."""
     del foto_capa_url
-    ribbon_text = (body or titulo or "Sindicompany").strip().upper()
+    ribbon_text = (body or titulo or _brand_label()).strip().upper()
     return f"""
 <!doctype html><html><head><meta charset="utf-8">
 {head_fonts}
@@ -6346,7 +6346,7 @@ def _capa_polaroid_stack(
     <div class="pol pol-2"><div class="pol-inner"></div></div>
     <div class="pol pol-3">
       <div class="pol-inner"></div>
-      <div class="pol-caption">Sindicompany · {_h(handle)}</div>
+      <div class="pol-caption">{_brand_label()} · {_h(handle)}</div>
     </div>
   </div>
   <div class="content">
