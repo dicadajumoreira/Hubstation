@@ -15,6 +15,21 @@ export const revalidate = 0;
 
 const ANGULOS = ["Emocional", "Informativa", "Provocativa"];
 
+// Renderiza o titulo destacando o trecho do hook marcado com [[...]] —
+// mostra ao editor o que vai virar destaque visual na capa (e remove os
+// colchetes). Fora da capa, normalmente nao ha marcador.
+function renderHook(text: string) {
+  return text.split(/\[\[(.+?)\]\]/).map((part, i) =>
+    i % 2 === 1 ? (
+      <mark key={i} className="bg-mint-200 text-onix-900 rounded px-0.5">
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  );
+}
+
 export default async function EscolherCopyPage({
   params,
 }: {
@@ -131,7 +146,7 @@ function CopyCard({
                 </div>
                 {s.titulo && (
                   <div className="text-sm font-semibold text-onix-900 leading-snug">
-                    {s.titulo}
+                    {renderHook(s.titulo)}
                   </div>
                 )}
                 {s.body && (

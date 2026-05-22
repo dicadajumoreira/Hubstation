@@ -1363,6 +1363,8 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"Use a estrutura de slides do FORMATO acima; a voz aqui e o tom de cada slide.\n\n"
         f"REGRAS GERAIS:\n"
         f"- Capa: o tema '{tema}' aparece literal ou em parafrase clara. Capa inteira (titulo + body) tem no max 20 palavras.\n"
+        f"- HOOK DA CAPA (prioridade maxima): o titulo da capa e a frase que PARA O SCROLL — verdade incomoda, identificacao, tensao ou curiosidade. Curto, leitura instantanea no celular. NUNCA slogan corporativo ou frase que comeca devagar.\n"
+        f"- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: 'WhatsApp [[nao e assembleia]].'. Marque [[ ]] APENAS no titulo da capa, nunca nos outros slides nem na legenda.\n"
         f"- Cada slide interno: tipo + titulo (3-7 palavras) + body (1-3 frases curtas, max 35 palavras).\n"
         f"- NUNCA cite numero de apartamento/unidade nem nome de condominio (real ou inventado) em nenhum slide ou legenda.\n"
         f"- Em posts educativos (mito, dado, tutorial, lista juridica): pelo menos UMA ancora — artigo (ex: 'Codigo Civil, art. 1.336'), decisao judicial (ex: 'STJ, REsp 1.699.022/SP, 2019') OU dado com fonte nomeada e datada.\n"
@@ -6766,6 +6768,12 @@ def _slide_html(
         # Cor do titulo da capa: cromatica da marca, legivel no painel
         # escuro (onix) onde o texto da capa fica. Corpo segue em sand.
         capa_titulo_color = _pick_title_color(p["onix"], p["white"], p)
+        # Hook visual: se a copy marcou o trecho-chave com [[...]], a base do
+        # titulo fica neutra (branca) e o trecho marcado recebe a cor da
+        # marca + grifo (.hook-hl). Sem marcador, o titulo inteiro fica na
+        # cor da marca (comportamento anterior).
+        capa_has_hook = "[[" in (titulo or "")
+        capa_titulo_base = p["white"] if capa_has_hook else capa_titulo_color
         return f"""
 <!doctype html><html><head><meta charset="utf-8">
 {head_fonts}
@@ -6889,9 +6897,18 @@ def _slide_html(
     font-size: {300 if is_consvicta else 257}px;
     line-height: {1.0 if is_consvicta else 0.95};
     letter-spacing: -0.015em;
-    color: {capa_titulo_color};
+    color: {capa_titulo_base};
     text-wrap: balance;
     font-style: {('italic' if is_consvicta else 'normal')};
+  }}
+  /* Hook visual: trecho-chave do hook destacado — cor da marca + grifo
+     (marca-texto) na mesma cor em baixa opacidade. Leitura instantanea. */
+  .hook-hl {{
+    color: {capa_titulo_color};
+    background-image: linear-gradient(transparent 60%, {capa_titulo_color}33 60%);
+    background-repeat: no-repeat;
+    padding: 0 0.04em;
+    border-radius: 4px;
   }}
   .capa-body {{
     font-family: {font_body};
@@ -6987,7 +7004,7 @@ def _slide_html(
   <div class="content">
     <span class="badge">{_h(_formato_label(formato))}</span>
     <div class="accent-line"></div>
-    <h1 class="capa-titulo">{_h_with_data(titulo, is_consvicta)}</h1>
+    <h1 class="capa-titulo">{_h_hook(titulo, is_consvicta)}</h1>
     {body_html}
   </div>
   {logo_top_img}
@@ -7397,7 +7414,31 @@ def _slide_html(
 
 
 def _h(s: str) -> str:
-    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    # Remove os marcadores de hook [[...]] (so a capa os renderiza como
+    # destaque; em qualquer outro contexto viram texto limpo).
+    s = (s or "").replace("[[", "").replace("]]", "")
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+# Marcador do trecho-chave do hook na capa: WhatsApp [[nao e assembleia]].
+_HOOK_PATTERN = re.compile(r"\[\[(.+?)\]\]")
+
+
+def _h_hook(s: str, enabled: bool) -> str:
+    """Renderiza o trecho marcado com [[...]] como <span class="hook-hl">,
+    pra destacar a parte mais forte do hook na capa. Fora do trecho aplica
+    _h_with_data normal. Sem marcador, igual a _h_with_data."""
+    s = s or ""
+    out: list[str] = []
+    last = 0
+    for m in _HOOK_PATTERN.finditer(s):
+        out.append(_h_with_data(s[last : m.start()], enabled))
+        out.append(
+            f'<span class="hook-hl">{_h_with_data(m.group(1), enabled)}</span>'
+        )
+        last = m.end()
+    out.append(_h_with_data(s[last:], enabled))
+    return "".join(out)
 
 
 # Padrao pra detectar dados quantitativos em texto: "23%", "20+",
