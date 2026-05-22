@@ -1217,6 +1217,18 @@ FORMATO_INSTRUCOES = {
 }
 
 
+# Esqueleto emocional por nº de slides. RESPIRO = slide tipo 'frase';
+# ultimo slide = sempre CTA. O FORMATO/tema encaixa dentro do arco.
+_ESTRUTURA_POR_SLIDES: dict[int, str] = {
+    5: "1 Hook · 2 Amplificacao da dor/conflito · 3 Virada/verdade incomoda · 4 Solucao/posicionamento · 5 Frase memoravel + CTA",
+    6: "1 Hook · 2 Identificacao · 3 Amplificacao da dor · 4 Verdade incomoda/virada · 5 Solucao/visao · 6 Frase memoravel + CTA",
+    7: "1 Hook · 2 Contexto/cena · 3 Problema principal · 4 Micro-tensao (abre loop) · 5 Verdade humana · 6 Solucao/posicionamento · 7 Frase final + CTA",
+    8: "1 Hook · 2 Identificacao · 3 Amplificacao do caos/dor · 4 Verdade incomoda · 5 RESPIRO (tipo 'frase') · 6 Explicacao/solucao · 7 Frase memoravel · 8 CTA",
+    9: "1 Hook · 2 Contexto · 3 Identificacao · 4 Amplificacao da dor · 5 Micro-tensao · 6 Verdade humana · 7 Solucao/posicionamento · 8 Frase memoravel · 9 CTA",
+    10: "1 Hook · 2 Contexto/personagem · 3 Identificacao · 4 Amplificacao do problema · 5 Micro-tensao · 6 Verdade incomoda · 7 RESPIRO (tipo 'frase') · 8 Solucao/nova visao · 9 Frase memoravel (manifesto) · 10 CTA",
+}
+
+
 def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
     """Gera os textos dos slides + legenda Instagram via GPT.
 
@@ -1369,7 +1381,7 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: 'WhatsApp [[nao e assembleia]].'. So no titulo da capa.\n"
         f"- ANCORAS DE ATENCAO (retencao): nos slides de conteudo, marque com [[ ]] no BODY no maximo 1 trecho de alto impacto por slide (+1 secundario no maximo) — verdade incomoda, identificacao, tensao, frase memoravel ou PALAVRA MAGNETICA (caos, silencio, pressao, desgaste, autoridade, conflito, refem, invisivel, bastidor, premium, processo, improviso, abandono, controle, presenca, sobrecarga, suporte, confianca, clareza, metodo, crise). NUNCA mais de 2 por slide.\n"
         f"- CTA (ultimo slide): marque a acao entre [[ ]], CONTINUACAO natural da emocao, nunca 'curta e siga'. Escolha pela emocao: indignacao -> opiniao forte/dilema; identificacao -> experiencia pessoal ('Qual situacao parecida voce ja viveu?'); tensao -> debate; aprendizado -> salvar ('[[Salva]] pra proxima assembleia.'); indireta -> compartilhar ('[[Manda no grupo]] de quem precisa ouvir.'); desejo -> aspiracional. EVITE repetir 'SIM ou NAO', 'Concorda?', 'O que acha?' — binario so quando a discussao for de fato binaria.\n"
-        f"- ARCO EMOCIONAL (por nº de slides): construa um arco sem meio morno — hook -> amplificacao da dor -> situacao/identificacao -> verdade incomoda -> consequencia -> novo olhar/solucao -> frase memoravel -> CTA, encaixando em {n_slides} slides. Alterne o tom (tensao, identificacao, reflexao); nunca o mesmo por varios slides. Use MINI PLOT TWIST quando couber ('parecia X. Nunca foi sobre X. Era sobre Y.').\n"
+        f"- ESTRUTURA (siga este esqueleto emocional, encaixando o FORMATO/tema): {_ESTRUTURA_POR_SLIDES.get(n_slides, 'Hook -> dor -> verdade incomoda -> solucao -> frase memoravel + CTA')}. Slides RESPIRO usam tipo 'frase'. Alterne o tom (tensao, identificacao, reflexao); nunca o mesmo por varios slides. Use MINI PLOT TWIST quando couber.\n"
         f"- VOZ HUMANA: frases falaveis, ritmo oral, sem juridiques nem academiques. EFEITO ESPELHO: ao menos 1 frase que faca pensar 'isso sou eu'. AUTORIDADE INVISIVEL: nunca dizer 'somos referencia'; a autoridade aparece na clareza e na observacao humana.\n"
         f"- Cada slide interno: tipo + titulo (3-7 palavras) + body (1-3 frases curtas, max 35 palavras).\n"
         f"- MICRO-TENSAO (retencao entre slides): os slides do MEIO terminam com um gancho que puxa o proximo (curiosidade, tensao, continuacao), nunca 100% fechados. Marque a frase de tensao/cliffhanger entre ~~ ~~ (vira SUBLINHADO, distinto do grifo do [[ ]]) — ex: '~~Mas o problema comeca depois.~~'. Evite explicacao tecnica continua e slides conclusivos no meio. So o ULTIMO slide (CTA) e a frase final memoravel podem fechar.\n"

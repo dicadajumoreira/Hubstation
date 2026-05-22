@@ -218,6 +218,18 @@ const OBJETIVO_INSTRUCOES: Record<string, string> = {
     `- CTA depende do tema: muito útil → "Salva esse post"; divide opiniões → CTA binário.`,
 };
 
+// Esqueleto emocional por quantidade de slides (estrutura ideal). O modelo
+// segue este arco e encaixa o FORMATO/tema dentro. RESPIRO = slide tipo
+// "frase" (limpo, centralizado). Último slide = sempre CTA.
+const ESTRUTURA_POR_SLIDES: Record<number, string> = {
+  5: '1 Hook · 2 Amplificação da dor/conflito · 3 Virada/verdade incômoda · 4 Solução/posicionamento · 5 Frase memorável + CTA',
+  6: '1 Hook · 2 Identificação · 3 Amplificação da dor · 4 Verdade incômoda/virada · 5 Solução/visão · 6 Frase memorável + CTA',
+  7: '1 Hook · 2 Contexto/cena · 3 Problema principal · 4 Micro-tensão (abre loop) · 5 Verdade humana · 6 Solução/posicionamento · 7 Frase final + CTA',
+  8: '1 Hook · 2 Identificação · 3 Amplificação do caos/dor · 4 Verdade incômoda · 5 RESPIRO (tipo "frase") · 6 Explicação/solução · 7 Frase memorável · 8 CTA',
+  9: '1 Hook · 2 Contexto · 3 Identificação · 4 Amplificação da dor · 5 Micro-tensão · 6 Verdade humana · 7 Solução/posicionamento · 8 Frase memorável · 9 CTA',
+  10: '1 Hook · 2 Contexto/personagem · 3 Identificação · 4 Amplificação do problema · 5 Micro-tensão · 6 Verdade incômoda · 7 RESPIRO (tipo "frase") · 8 Solução/nova visão · 9 Frase memorável (manifesto) · 10 CTA',
+};
+
 // Pool de nomes pra personagens de HISTÓRIA REAL. Um nome aleatório é
 // injetado por geração pra evitar que o modelo ancore sempre no mesmo
 // (cada chamada da API é stateless, então sem isso ele repete o primeiro
@@ -312,7 +324,7 @@ export async function gerarTresCopies(input: {
     `- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: "WhatsApp [[não é assembleia]].", "O síndico cansado começa a [[perder autoridade]].". Marque [[ ]] APENAS no título da capa (slide 1), nunca nos outros slides nem na legenda.\n` +
     `- ÂNCORAS DE ATENÇÃO (retenção): nos slides de conteúdo, marque com [[ ]] dentro do BODY no máximo 1 trecho de alto impacto por slide (no máximo +1 secundário) — verdade incômoda, identificação, tensão, frase memorável OU uma PALAVRA MAGNÉTICA: caos, silêncio, pressão, desgaste, autoridade, conflito, refém, invisível, bastidor, premium, processo, improviso, abandono, controle, presença, sobrecarga, suporte, confiança, clareza, método, crise. NUNCA mais de 2 por slide; destacar demais tira a força.\n` +
     `- CTA (último slide): marque a ação entre [[ ]] e faça-a CONTINUAÇÃO natural da emoção construída, nunca "curta e siga". Escolha o tipo pela emoção do post: indignação → opinião forte/dilema; identificação → experiência pessoal ("Qual situação parecida você já viveu?"); tensão → debate; aprendizado → salvar ("[[Salva]] pra próxima assembleia."); indireta → compartilhar ("[[Manda no grupo]] de quem precisa ouvir."); desejo → aspiracional ("Gestão premium começa nos [[detalhes]]."). EVITE repetir "SIM ou NÃO", "Concorda?", "O que acha?" — binário só quando a discussão for de fato binária. O CTA é parte do roteiro emocional, não um detalhe final.\n` +
-    `- ARCO EMOCIONAL (estrutura por nº de slides): construa um arco, sem meio morno — capa=hook; depois amplificação da dor → situação real/identificação → verdade incômoda → consequência → novo olhar/solução → frase memorável → CTA, encaixando no total de ${input.n_slides} slides (carrosséis curtos comprimem etapas; longos expandem). Alterne o tom (tensão, identificação, reflexão, provocação) — nunca o mesmo tom por vários slides seguidos. Use um MINI PLOT TWIST quando couber ("parecia X. Nunca foi sobre X. Era sobre Y.").\n` +
+    `- ESTRUTURA (siga este esqueleto emocional, encaixando o FORMATO/tema dentro): ${ESTRUTURA_POR_SLIDES[input.n_slides] ?? "Hook → dor → verdade incômoda → solução → frase memorável + CTA"}. Slides marcados RESPIRO usam tipo "frase" (slide limpo/centralizado). Alterne o tom (tensão, identificação, reflexão) — nunca o mesmo por vários slides. Use um MINI PLOT TWIST quando couber ("parecia X. Nunca foi sobre X. Era sobre Y.").\n` +
     `- VOZ HUMANA: frases faláveis, ritmo oral, pausas naturais — sem juridiquês, academiquês nem excesso de conectivos. EFEITO ESPELHO: ao menos 1 frase que faça pensar "isso sou eu" ou "isso é alguém que conheço". AUTORIDADE INVISÍVEL: nunca dizer "somos referência/especialistas"; a autoridade aparece na clareza e na observação humana.\n` +
     `- Cada slide interno: tipo + título (3-7 palavras) + body (1-3 frases curtas, máx 35 palavras). Seja conciso — não encha linguiça.\n` +
     `- MICRO-TENSÃO (retenção entre slides): os slides do MEIO devem terminar com um gancho que puxa o próximo — curiosidade, tensão ou continuação emocional —, nunca 100% fechados. O usuário tem que pensar "deixa eu ver o próximo". Marque a frase de tensão/cliffhanger entre ~~ ~~ (vira SUBLINHADO, distinto do grifo do [[ ]]) — ex: "~~Mas o problema começa depois.~~", "~~E é aqui que a gestão perde autoridade.~~". Evite explicação técnica contínua e slides conclusivos no meio. Só o ÚLTIMO slide (CTA) e a frase final memorável podem fechar.\n` +
