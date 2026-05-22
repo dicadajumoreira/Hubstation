@@ -7857,10 +7857,28 @@ def _humanizer_pass(
                 continue
             titulo = up.get("titulo")
             body = up.get("body")
+            # Trava deterministica: se o humanizer REDUZIU os marcadores
+            # [[ ]] de um campo (drop nao-deterministico do GPT), mantem o
+            # texto de ANTES — que ja tem os marcadores + acentos. Garante o
+            # destaque mesmo quando o GPT ignora a regra de preservar.
             if isinstance(titulo, str) and titulo.strip():
-                s["titulo"] = _apply_accent_dict(titulo)
+                new_t = _apply_accent_dict(titulo)
+                if str(s.get("titulo") or "").count("[[") > new_t.count("[["):
+                    print(
+                        f"[carrossel] humanizer dropou [[ ]] no titulo {i}; mantendo original",
+                        flush=True,
+                    )
+                else:
+                    s["titulo"] = new_t
             if isinstance(body, str):
-                s["body"] = _apply_accent_dict(body)
+                new_b = _apply_accent_dict(body)
+                if str(s.get("body") or "").count("[[") > new_b.count("[["):
+                    print(
+                        f"[carrossel] humanizer dropou [[ ]] no body {i}; mantendo original",
+                        flush=True,
+                    )
+                else:
+                    s["body"] = new_b
 
     new_legenda = data.get("legenda")
     if isinstance(new_legenda, str) and new_legenda.strip():
