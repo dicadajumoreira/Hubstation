@@ -1364,7 +1364,9 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"REGRAS GERAIS:\n"
         f"- Capa: o tema '{tema}' aparece literal ou em parafrase clara. Capa inteira (titulo + body) tem no max 20 palavras.\n"
         f"- HOOK DA CAPA (prioridade maxima): o titulo da capa e a frase que PARA O SCROLL — verdade incomoda, identificacao, tensao ou curiosidade. Curto, leitura instantanea no celular. NUNCA slogan corporativo ou frase que comeca devagar.\n"
-        f"- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: 'WhatsApp [[nao e assembleia]].'. Marque [[ ]] APENAS no titulo da capa, nunca nos outros slides nem na legenda.\n"
+        f"- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: 'WhatsApp [[nao e assembleia]].'. So no titulo da capa.\n"
+        f"- ANCORAS DE ATENCAO (retencao): nos slides de conteudo, marque com [[ ]] no BODY no maximo 1 trecho de alto impacto por slide (+1 secundario no maximo) — verdade incomoda, identificacao, tensao, frase memoravel ou palavra-chave forte (refem, caos, processo, autoridade, improviso, conflito). NUNCA mais de 2 por slide; destacar demais tira a forca.\n"
+        f"- CTA: no ultimo slide, marque a acao principal entre [[ ]] (ex: '[[Salva esse post]] pra usar depois.').\n"
         f"- Cada slide interno: tipo + titulo (3-7 palavras) + body (1-3 frases curtas, max 35 palavras).\n"
         f"- NUNCA cite numero de apartamento/unidade nem nome de condominio (real ou inventado) em nenhum slide ou legenda.\n"
         f"- Em posts educativos (mito, dado, tutorial, lista juridica): pelo menos UMA ancora — artigo (ex: 'Codigo Civil, art. 1.336'), decisao judicial (ex: 'STJ, REsp 1.699.022/SP, 2019') OU dado com fonte nomeada e datada.\n"
@@ -7052,7 +7054,7 @@ def _slide_html(
     titulo_color = _pick_title_color(bg_color, fg_color, p)
 
     body_html = (
-        f'<p class="slide-body">{_h_with_data(body, is_consvicta)}</p>'
+        f'<p class="slide-body">{_h_hook(body, is_consvicta, "body-hl")}</p>'
         if body
         else ""
     )
@@ -7272,6 +7274,16 @@ def _slide_html(
     max-width: 22ch;
     letter-spacing: {('0.005em' if is_consvicta else 'normal')};
   }}
+  /* Ancora de atencao no corpo: trecho de alto impacto marcado com [[...]]
+     -> cor da marca (mesma do titulo do slide) + peso + grifo marca-texto.
+     Cria ritmo visual e impede blocos de texto iguais. */
+  .body-hl {{
+    color: {titulo_color};
+    font-weight: {600 if is_consvicta else 800};
+    background-image: linear-gradient(transparent 60%, {titulo_color}30 60%);
+    background-repeat: no-repeat;
+    border-radius: 4px;
+  }}
   /* Para palavras destacadas dentro do body — 55-70 display
      (mid 62 -> 176 css). Use <span class="destaque">…</span>. */
   .destaque {{
@@ -7424,17 +7436,18 @@ def _h(s: str) -> str:
 _HOOK_PATTERN = re.compile(r"\[\[(.+?)\]\]")
 
 
-def _h_hook(s: str, enabled: bool) -> str:
-    """Renderiza o trecho marcado com [[...]] como <span class="hook-hl">,
-    pra destacar a parte mais forte do hook na capa. Fora do trecho aplica
-    _h_with_data normal. Sem marcador, igual a _h_with_data."""
+def _h_hook(s: str, enabled: bool, cls: str = "hook-hl") -> str:
+    """Renderiza o(s) trecho(s) marcado(s) com [[...]] como
+    <span class="{cls}">, pra destacar a parte mais forte do hook na capa
+    (cls=hook-hl) ou as ancoras de atencao no corpo (cls=body-hl). Fora do
+    trecho aplica _h_with_data normal. Sem marcador, igual a _h_with_data."""
     s = s or ""
     out: list[str] = []
     last = 0
     for m in _HOOK_PATTERN.finditer(s):
         out.append(_h_with_data(s[last : m.start()], enabled))
         out.append(
-            f'<span class="hook-hl">{_h_with_data(m.group(1), enabled)}</span>'
+            f'<span class="{cls}">{_h_with_data(m.group(1), enabled)}</span>'
         )
         last = m.end()
     out.append(_h_with_data(s[last:], enabled))
