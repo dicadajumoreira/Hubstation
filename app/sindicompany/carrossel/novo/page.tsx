@@ -126,16 +126,16 @@ export default async function NovoCarrosselPage({
 
           <Field
             label="Quantidade de slides"
-            hint="De 1 a 10. Recomendado: 5 a 7."
+            hint="De 5 a 10. Recomendado: 6 a 8."
           >
             <select
               name="n_slides"
               defaultValue={v("n_slides") || "6"}
               className={inputCls}
             >
-              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+              {Array.from({ length: 6 }, (_, i) => i + 5).map((n) => (
                 <option key={n} value={n}>
-                  {n} slide{n > 1 ? "s" : ""}
+                  {n} slides
                 </option>
               ))}
             </select>
