@@ -1369,6 +1369,10 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"- CTA: no ultimo slide, marque a acao principal entre [[ ]] (ex: '[[Salva esse post]] pra usar depois.').\n"
         f"- Cada slide interno: tipo + titulo (3-7 palavras) + body (1-3 frases curtas, max 35 palavras).\n"
         f"- MICRO-TENSAO (retencao entre slides): os slides do MEIO terminam com um gancho que puxa o proximo (curiosidade, tensao, continuacao), nunca 100% fechados. Ex: 'Mas o problema comeca depois.', 'E e aqui que a gestao perde autoridade.', 'So que quase ninguem percebe isso.', 'Mas o pior ainda vem.'. Evite explicacao tecnica continua e slides conclusivos no meio. So o ULTIMO slide (CTA) e a frase final memoravel podem fechar.\n"
+        f"- VERDADE HUMANA (o que MAIS viraliza): condominio e comportamento humano. Prefira observacoes reais da vida que facam pensar 'isso e MUITO verdade' a explicacao tecnica. Ex: 'O problema raramente comeca no problema.', 'Sindico forte tambem cansa.', 'O grupo do WhatsApp muda o comportamento das pessoas.'.\n"
+        f"- FRASE PRINTAVEL + INDIRETA SOCIAL: inclua ao menos 1 frase digna de print/repost, forte e memoravel (ex: 'Condominio nao funciona no grito. Funciona no processo.'). Vale a indireta (parece reflexao, e indireta): 'Tem morador que quer regra. Ate a regra chegar nele.'.\n"
+        f"- RESPIRO VISUAL (ritmo): alterne slides densos e leves; NUNCA todos com a mesma densidade. Inclua ao menos 1 slide com tipo 'frase': SO uma frase curta e memoravel, com body vazio — vai num layout limpo e centralizado.\n"
+        f"- SENSACAO EDITORIAL: o carrossel deve parecer revista/manifesto, nao post de marketing generico. Menos texto, mais peso.\n"
         f"- NUNCA cite numero de apartamento/unidade nem nome de condominio (real ou inventado) em nenhum slide ou legenda.\n"
         f"- Em posts educativos (mito, dado, tutorial, lista juridica): pelo menos UMA ancora — artigo (ex: 'Codigo Civil, art. 1.336'), decisao judicial (ex: 'STJ, REsp 1.699.022/SP, 2019') OU dado com fonte nomeada e datada.\n"
         f"{contexto}"
@@ -7022,6 +7026,10 @@ def _slide_html(
     # Excecao: ULTIMO SLIDE (CTA) sempre fundo onix pra fechar o
     # carrossel com peso de marca.
     is_cta = tipo == "cta" or slide_idx == total
+    # Slide "respiro"/frase printavel: layout centralizado e minimalista
+    # (frase grande, muito espaco, sem badge/numero) — cria ritmo visual.
+    # Acionado por tipo frase/respiro/quote; nao afeta os slides normais.
+    is_frase = (tipo or "").strip().lower() in ("frase", "respiro", "quote") and not is_cta
     if is_cta:
         bg_color = p["onix"]
         fg_color = p["white"]
@@ -7231,6 +7239,7 @@ def _slide_html(
     top: 50%;
     transform: translateY(-50%);
     z-index: 2;
+    {('text-align: center;' if is_frase else '')}
   }}
   .badge {{
     display: inline-block;
@@ -7256,13 +7265,14 @@ def _slide_html(
   .slide-titulo {{
     font-family: {font_display};
     font-weight: {500 if is_consvicta else 800};
-    font-size: {(titulo_font + 30) if is_consvicta else titulo_font}px;
+    font-size: {(titulo_font + 70) if is_frase else ((titulo_font + 30) if is_consvicta else titulo_font)}px;
     line-height: {1.02 if is_consvicta else 0.95};
     letter-spacing: -0.015em;
     color: {titulo_color};
-    margin-bottom: 56px;
+    margin-bottom: {0 if is_frase else 56}px;
     text-wrap: balance;
-    max-width: 18ch;
+    max-width: {'16ch' if is_frase else '18ch'};
+    {('margin-left: auto; margin-right: auto;' if is_frase else '')}
     font-style: {('italic' if is_consvicta else 'normal')};
   }}
   .slide-body {{
@@ -7412,12 +7422,12 @@ def _slide_html(
   {slide_foto_div}
   {icon_bg_div}
   <div class="frame-corner"></div>
-  {('' if is_consvicta else f'<div class="bignum">{slide_idx:02d}</div>')}
+  {('' if (is_consvicta or is_frase) else f'<div class="bignum">{slide_idx:02d}</div>')}
   <div class="content">
-    <span class="badge">{_h(badge_label)}</span>
-    <div class="accent-line"></div>
+    {('' if is_frase else f'<span class="badge">{_h(badge_label)}</span>')}
+    {('' if is_frase else '<div class="accent-line"></div>')}
     <h2 class="slide-titulo">{_h_with_data(titulo, is_consvicta)}</h2>
-    {body_html}
+    {('' if is_frase else body_html)}
   </div>
   {logo_top_img}
   <div class="handle">{handle}</div>
