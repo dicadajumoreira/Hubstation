@@ -113,14 +113,16 @@ export async function iniciarCarrosselAction(formData: FormData): Promise<void> 
     ? brandRaw
     : "sindicompanybr";
   const objetivoRaw = getStr(formData, "objetivo");
-  const objetivosValidos =
-    brand === "bysindicompany"
-      ? ["comentarios", "salvamentos", "clientes", "autoridade"]
-      : brand === "consvictabr"
-        ? ["comentarios", "salvamentos", "clientes", "autoridade"]
-        : brand === "sindicompanybr"
-          ? ["comentarios", "salvamentos", "clientes", "educar"]
-          : ["comentarios", "salvamentos", "clientes", "autoridade", "educar"];
+  // O wizard oferece os 5 objetivos pra qualquer marca, entao a validacao
+  // aceita os 5 (antes restringia por marca e rejeitava combinacoes que a
+  // UI permitia — ex: Consvicta + Educar).
+  const objetivosValidos = [
+    "comentarios",
+    "salvamentos",
+    "clientes",
+    "autoridade",
+    "educar",
+  ];
   const objetivo = objetivosValidos.includes(objetivoRaw) ? objetivoRaw : "";
   const titulo = getStr(formData, "titulo");
   const temaSelecionado = getStr(formData, "tema");
