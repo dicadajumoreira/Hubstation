@@ -6759,6 +6759,9 @@ def _slide_html(
                 font_body=font_body,
                 foto_capa_url=foto_capa_url,
             )
+        # Cor do titulo da capa: cromatica da marca, legivel no painel
+        # escuro (onix) onde o texto da capa fica. Corpo segue em sand.
+        capa_titulo_color = _pick_title_color(p["onix"], p["white"], p)
         return f"""
 <!doctype html><html><head><meta charset="utf-8">
 {head_fonts}
@@ -6882,7 +6885,7 @@ def _slide_html(
     font-size: {300 if is_consvicta else 257}px;
     line-height: {1.0 if is_consvicta else 0.95};
     letter-spacing: -0.015em;
-    color: {p["white"]};
+    color: {capa_titulo_color};
     text-wrap: balance;
     font-style: {('italic' if is_consvicta else 'normal')};
   }}
