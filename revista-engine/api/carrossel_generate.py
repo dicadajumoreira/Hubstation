@@ -46,6 +46,10 @@ _BRAND = "sindicompanybr"
 # (legado) ou a capa classica se a env nao estiver setada.
 _COVER_ARCHETYPE = ""
 
+# Estilo de paginacao do slide (dots/ticks/bar/index), escolhido UMA vez
+# por carrossel em gerar_carrossel pra variar entre carrosseis. Vazio = dots.
+_PAGINATION_STYLE = ""
+
 # Identidade da marca atual, vinda da tabela `marcas`. Setadas em
 # gerar_carrossel() a partir do slug. Para as 3 marcas chumbadas
 # (sindicompanybr/bysindicompany/consvictabr) prefixo e handle continuam
@@ -6727,6 +6731,29 @@ COVER_ARCHETYPES_SC = {
 # polaroid-stack, avatar-quote, floating-card, photo-strip, photo-grid.
 
 
+def _slide_pagination(
+    slide_idx: int,
+    total: int,
+    is_frase: bool,
+    accent: str,
+    fg_color: str,
+    font_numeric: str,
+) -> str:
+    """Paginacao do slide (pool por carrossel), pra TODAS as marcas. Cores
+    da marca (accent + texto) e fonte numerica da marca. Frase/respiro nao
+    recebe marcador. Substitui o antigo numero gigante (bignum)."""
+    if is_frase:
+        return ""
+    return brand_kit.sc_pagination_html(
+        _PAGINATION_STYLE or "dots",
+        slide_idx,
+        total,
+        accent,
+        fg_color,
+        font=font_numeric,
+    )
+
+
 def _slide_html(
     *,
     slide_idx: int,
@@ -7552,7 +7579,7 @@ def _slide_html(
   {slide_foto_div}
   {icon_bg_div}
   <div class="frame-corner"></div>
-  {('' if (is_consvicta or is_frase) else f'<div class="bignum">{slide_idx:02d}</div>')}
+  {_slide_pagination(slide_idx, total, is_frase, accent, fg_color, font_numeric)}
   <div class="content">
     {('' if is_frase else f'<span class="badge">{_h(badge_label)}</span>')}
     {('' if is_frase else '<div class="accent-line"></div>')}
@@ -8174,7 +8201,7 @@ def _ensure_cta(
 def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
     global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE, _BRAND_PREFIX, _BRAND_HANDLE
-    global _BRAND_TIPOGRAFIA, _BRAND_NAME
+    global _BRAND_TIPOGRAFIA, _BRAND_NAME, _PAGINATION_STYLE
     global _SC_NAVY, _SC_CYAN, _SC_BEIGE, _SC_LAVENDER, _SC_PURPLE, _SC_PAPER, _SC_PAPER_WARM
     print(f"[carrossel] iniciando geração de {carrossel_id}", flush=True)
     try:
@@ -8248,6 +8275,11 @@ def gerar_carrossel(carrossel_id: str) -> int:
                 f" (source={'db' if ca_db else 'env'})",
                 flush=True,
             )
+
+        # Paginacao: estilo escolhido por carrossel (deterministico pelo id)
+        # pra variar entre carrosseis sem mudar dentro do mesmo.
+        _PAGINATION_STYLE = brand_kit.pick_pagination_style(carrossel_id)
+        print(f"[carrossel] pagination={_PAGINATION_STYLE}", flush=True)
 
         _update_carrossel(carrossel_id, {"status": "em_producao", "erro_mensagem": None})
 

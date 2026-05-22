@@ -230,6 +230,83 @@ def pick_logo_colors(bg_is_dark: bool, p: dict) -> tuple[str, str, str]:
     return navy, beige, navy
 
 
+# ---------------------------------------------------------------------------
+# Paginacao do slide — pool de estilos (varia por carrossel)
+# ---------------------------------------------------------------------------
+# Substitui o numero gigante de fundo. O estilo e escolhido UMA vez por
+# carrossel (deterministico pelo id) e fica consistente em todos os slides;
+# entre carrosseis varia, dando ritmo ao feed. Tamanhos em px do slide 4K
+# (3072x3839). `color` = cor do indicador ativo (navy no claro, branco no
+# escuro); o inativo usa a mesma cor com alpha.
+
+PAGINATION_STYLES = ["dots", "ticks", "bar", "index"]
+# pool com peso: dots aparece mais (preferido), mas todos entram
+PAGINATION_POOL = ["dots", "dots", "ticks", "bar", "index"]
+
+
+def pick_pagination_style(seed: str) -> str:
+    """Escolhe um estilo do pool de forma deterministica pelo seed (id do
+    carrossel). Mesmo carrossel -> mesmo estilo; carrosseis diferentes ->
+    estilos diferentes."""
+    if not seed:
+        return PAGINATION_POOL[0]
+    h = sum(ord(c) for c in str(seed))
+    return PAGINATION_POOL[h % len(PAGINATION_POOL)]
+
+
+def sc_pagination_html(
+    style: str,
+    idx: int,
+    total: int,
+    accent: str,
+    fg: str,
+    *,
+    font: str = "'Epilogue', sans-serif",
+) -> str:
+    """HTML absoluto da paginacao. Cores da marca: `accent` no indicador
+    ativo, `fg` (texto) esmaecido na trilha. `font` = fonte numerica da
+    marca (estilo 'index'). idx 1-based."""
+    track = f"{fg}33"  # ~20% alpha do texto da marca
+    if style == "bar":
+        pct = max(0.0, min(1.0, idx / total)) * 100 if total else 0
+        return (
+            f'<div style="position:absolute;left:0;right:0;bottom:0;height:16px;'
+            f'background:{fg}1f;z-index:3">'
+            f'<div style="height:100%;width:{pct:.1f}%;background:{accent}"></div>'
+            f"</div>"
+        )
+    if style == "index":
+        return (
+            f'<div style="position:absolute;right:180px;bottom:170px;'
+            f'text-align:right;z-index:3;font-family:{font}">'
+            f'<div style="font-size:180px;font-weight:800;color:{fg};'
+            f'line-height:0.8;letter-spacing:-0.04em">{idx:02d}</div>'
+            f'<div style="font-size:64px;font-weight:600;color:{accent};'
+            f'margin-top:8px">/ {total:02d}</div></div>'
+        )
+    if style == "ticks":
+        bars = "".join(
+            f'<span style="width:22px;height:{72 if i == idx - 1 else 38}px;'
+            f'border-radius:11px;background:{accent if i == idx - 1 else track}">'
+            f"</span>"
+            for i in range(total)
+        )
+        return (
+            f'<div style="position:absolute;right:180px;bottom:250px;z-index:3;'
+            f'display:flex;gap:20px;align-items:flex-end">{bars}</div>'
+        )
+    # default: dots
+    dots = "".join(
+        f'<span style="width:32px;height:32px;border-radius:50%;'
+        f'background:{accent if i == idx - 1 else track}"></span>'
+        for i in range(total)
+    )
+    return (
+        f'<div style="position:absolute;right:180px;bottom:250px;z-index:3;'
+        f'display:flex;gap:28px;align-items:center">{dots}</div>'
+    )
+
+
 def pick_symbol_colors(bg_is_dark: bool, p: dict) -> tuple[str, str]:
     """(casas, ponto) conforme o fundo do slide, seguindo o brandbook:
     fundo escuro -> casas brancas + ponto beige; fundo claro -> casas navy
