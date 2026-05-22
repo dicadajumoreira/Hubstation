@@ -96,7 +96,9 @@ export type CarrosselFormato =
   | "erro_fatal"
   | "bastidor"
   | "camada_invisivel"
-  | "dialogo";
+  | "dialogo"
+  | "desabafo"
+  | "escalada";
 
 export const CARROSSEL_FORMATOS: {
   id: CarrosselFormato;
@@ -118,6 +120,8 @@ export const CARROSSEL_FORMATOS: {
   { id: "bastidor", label: "Bastidor real", hint: "Documental, humaniza a marca" },
   { id: "camada_invisivel", label: "Camada invisível", hint: "Profundidade: 'nunca pensei nisso'" },
   { id: "dialogo", label: "Diálogo", hint: "Conversa com punch final" },
+  { id: "desabafo", label: "Desabafo controlado", hint: "Vulnerabilidade íntima, cria comunidade" },
+  { id: "escalada", label: "A escalada", hint: "Tensão crescente, cinematográfica" },
 ];
 
 const FORMATO_IDS = new Set(CARROSSEL_FORMATOS.map((f) => f.id));
