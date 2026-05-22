@@ -184,7 +184,7 @@ export function MarcaForm({
           min={0}
           max={10}
           step={1}
-          defaultValue={marca?.temperatura ?? ""}
+          defaultValue={marca ? (marca.temperatura ?? 6) : 6}
           placeholder="ex: 7"
           className={`${inputCls} max-w-[140px]`}
         />

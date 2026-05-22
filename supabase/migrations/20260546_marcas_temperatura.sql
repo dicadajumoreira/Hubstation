@@ -13,3 +13,8 @@ alter table public.marcas add column if not exists temperatura smallint;
 -- Seed das marcas internas (pontos medios das faixas sugeridas).
 update public.marcas set temperatura = 7 where slug in ('sindicompanybr', 'bysindicompany');
 update public.marcas set temperatura = 4 where slug = 'consvictabr';
+
+-- Backfill: TODA marca atual (Lavandery e quaisquer outras) recebe um
+-- valor padrao (6, "emocional/provocador") pra nenhuma ficar sem
+-- temperatura. A editora ajusta depois no cadastro.
+update public.marcas set temperatura = 6 where temperatura is null;
