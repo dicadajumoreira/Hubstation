@@ -94,6 +94,24 @@ const FORMATO_INSTRUCOES: Record<string, string> = {
     `  4: o contra-argumento que o leitor vai pensar — e a resposta a ele.\n` +
     `  5: argumento 2 e consequência prática.\n` +
     `  último: CTA "Concorda ou discorda? Comenta CONCORDO ou DISCORDO.".`,
+  hook_punch:
+    `FORMATO: HOOK PUNCH (o mais agressivo — para o scroll na hora).\n` +
+    `- Frases CURTAS e fortes, poucas palavras por slide, ritmo rápido, tensão alta. Cada slide é um soco.\n` +
+    `- Nada de explicação longa: impacto emocional progressivo, um golpe por slide.\n` +
+    `- Use bastante verdade humana e palavras magnéticas. Vários slides funcionam como respiro (tipo "frase").\n` +
+    `- Capa: a frase mais forte possível, máx 6 palavras.`,
+  pov:
+    `FORMATO: POV (point of view — identificação extrema, "isso sou eu").\n` +
+    `- Capa começa com "POV:" + uma situação MUITO específica e reconhecível (ex: "POV: você abriu o grupo do condomínio às 22h.").\n` +
+    `- Tom cinematográfico, presente, em 2a pessoa ("você..."). Escalada emocional até uma verdade humana.\n` +
+    `- O objetivo é o leitor pensar "sou eu / é alguém que conheço" e marcar/compartilhar.\n` +
+    `- CTA de identificação ou compartilhamento.`,
+  tweet:
+    `FORMATO: TWEET STYLE (frase curta, printável, repostável).\n` +
+    `- Cada slide é uma frase de efeito que funciona SOZINHA — observação humana, verdade incômoda ou indireta. Leitura instantânea.\n` +
+    `- Quase todos os slides são tipo "frase" (limpo, centralizado). Nada de parágrafo.\n` +
+    `- Pensado pra print/repost e branding. Máx 1 ideia por slide.\n` +
+    `- CTA leve de compartilhamento.`,
 };
 
 interface ChatOk {

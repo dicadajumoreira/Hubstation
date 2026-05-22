@@ -88,7 +88,10 @@ export type CarrosselFormato =
   | "antes_depois"
   | "dado_choca"
   | "tutorial"
-  | "opiniao";
+  | "opiniao"
+  | "hook_punch"
+  | "pov"
+  | "tweet";
 
 export const CARROSSEL_FORMATOS: {
   id: CarrosselFormato;
@@ -102,6 +105,9 @@ export const CARROSSEL_FORMATOS: {
   { id: "dado_choca", label: "Dado que choca", hint: "Estatística com peso" },
   { id: "tutorial", label: "Tutorial rápido", hint: "Passo a passo prático" },
   { id: "opiniao", label: "Opinião forte", hint: "Posição com argumento" },
+  { id: "hook_punch", label: "Hook Punch", hint: "Frases curtas, alto impacto, ritmo rápido" },
+  { id: "pov", label: "POV", hint: "Identificação extrema: 'isso sou eu'" },
+  { id: "tweet", label: "Tweet style", hint: "Frase curta, printável, repostável" },
 ];
 
 const FORMATO_IDS = new Set(CARROSSEL_FORMATOS.map((f) => f.id));

@@ -1214,6 +1214,24 @@ FORMATO_INSTRUCOES = {
         "2 o problema que motivou (dado/situacao). 3 argumento 1. 4 o contra-argumento + resposta. "
         "5 argumento 2 e consequencia pratica. ultimo CTA 'Concorda ou discorda? Comenta CONCORDO ou DISCORDO'."
     ),
+    "hook_punch": (
+        "FORMATO: HOOK PUNCH (o mais agressivo — para o scroll na hora).\n"
+        "- Frases CURTAS e fortes, poucas palavras por slide, ritmo rapido, tensao alta. Cada slide e um soco.\n"
+        "- Nada de explicacao longa: impacto emocional progressivo, um golpe por slide. Varios slides tipo 'frase'.\n"
+        "- Use verdade humana e palavras magneticas. Capa: a frase mais forte possivel, max 6 palavras."
+    ),
+    "pov": (
+        "FORMATO: POV (identificacao extrema, 'isso sou eu').\n"
+        "- Capa comeca com 'POV:' + situacao MUITO especifica e reconhecivel (ex: 'POV: voce abriu o grupo do condominio as 22h').\n"
+        "- Tom cinematografico, presente, 2a pessoa ('voce...'). Escalada emocional ate uma verdade humana.\n"
+        "- Objetivo: 'sou eu / e alguem que conheco' -> marcar/compartilhar. CTA de identificacao ou compartilhamento."
+    ),
+    "tweet": (
+        "FORMATO: TWEET STYLE (frase curta, printavel, repostavel).\n"
+        "- Cada slide e uma frase de efeito que funciona SOZINHA (observacao humana, verdade incomoda, indireta). Leitura instantanea.\n"
+        "- Quase todos os slides sao tipo 'frase' (limpo/centralizado). Nada de paragrafo. 1 ideia por slide.\n"
+        "- Pensado pra print/repost e branding. CTA leve de compartilhamento."
+    ),
 }
 
 
@@ -1476,6 +1494,9 @@ FORMATO_LABELS = {
     "dado_choca": "Dado que Choca",
     "tutorial": "Tutorial Rápido",
     "opiniao": "Opinião Forte",
+    "hook_punch": "Hook Punch",
+    "pov": "POV",
+    "tweet": "Tweet",
 }
 
 
