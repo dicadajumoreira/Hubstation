@@ -14,7 +14,7 @@ const FORMATO_INSTRUCOES: Record<string, string> = {
   historia_real:
     `FORMATO: HISTÓRIA REAL (o que mais engaja e salva).\n` +
     `- Dê um NOME PRÓPRIO ao personagem (use o nome indicado abaixo no briefing), nunca "um morador".\n` +
-    `- Detalhes concretos: "6 kg", "4 horas", "23%", "Ap. 8B" — tornam crível.\n` +
+    `- Detalhes concretos tornam crível: "6 kg", "4 horas", "23%". Se citar unidade/apartamento, VARIE o número a cada roteiro — nunca repita sempre o mesmo.\n` +
     `- A história tem virada: setup → conflito → descoberta → resolução.\n` +
     `- Personagens/situações podem ser compostos. NUNCA invente condomínios ou endereços reais.\n` +
     `ESTRUTURA DE SLIDES:\n` +
