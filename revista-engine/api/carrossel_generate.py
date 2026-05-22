@@ -7641,21 +7641,27 @@ def _render_slide_png(html: str) -> bytes:
                 else _HL_STYLE + html
             )
             page.set_content(html_out, wait_until="networkidle")
-            # Aguarda TODAS as fontes (incluindo as inline base64) ficarem
-            # prontas pro layout. document.fonts.ready resolve quando o
-            # FontFaceSet termina de carregar todas as font-face
-            # declaracoes. Sem esse await, o screenshot pode capturar
-            # o frame ANTES das fontes da marca serem aplicadas.
+            # Garante que TODAS as fontes da marca (inline base64) estejam
+            # carregadas E aplicadas antes do screenshot. Fontes @font-face
+            # carregam de forma PREGUICOSA (so quando usadas), entao forcamos
+            # o load de cada face e aguardamos document.fonts.ready. Sem isso,
+            # marcas com fontes pesadas (Consvicta = 2.3MB) podem ser
+            # capturadas no fallback serif (Georgia) — fonte fora da marca.
             try:
-                page.wait_for_function(
-                    "document.fonts && document.fonts.status === 'loaded'",
-                    timeout=15000,
+                page.evaluate(
+                    "async () => {"
+                    "  try { await Promise.all("
+                    "    Array.from(document.fonts).map((f) => f.load())"
+                    "  ); } catch (e) {}"
+                    "  if (document.fonts && document.fonts.ready) {"
+                    "    await document.fonts.ready;"
+                    "  }"
+                    "}"
                 )
             except Exception:  # noqa: BLE001
-                # Se o assert falhar (caso raro de bug do navegador),
-                # segue com o screenshot — melhor render parcial do
-                # que falha total.
                 pass
+            # Buffer pro layout/paint aplicar as fontes recem-carregadas.
+            page.wait_for_timeout(300)
             png = page.screenshot(
                 full_page=False,
                 type="png",

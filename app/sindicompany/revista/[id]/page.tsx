@@ -194,7 +194,7 @@ export default async function RevistaPage({
               Criada em
             </div>
             <div className="text-onix-800 tabular-nums">
-              {new Date(revista.created_at).toLocaleString("pt-BR")}
+              {new Date(revista.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
             </div>
           </div>
           <div>
@@ -203,7 +203,7 @@ export default async function RevistaPage({
             </div>
             <div className="text-onix-800 tabular-nums">
               {revista.gerado_em
-                ? new Date(revista.gerado_em).toLocaleString("pt-BR")
+                ? new Date(revista.gerado_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
                 : "—"}
             </div>
           </div>
