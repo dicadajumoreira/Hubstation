@@ -1368,6 +1368,7 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"- ANCORAS DE ATENCAO (retencao): nos slides de conteudo, marque com [[ ]] no BODY no maximo 1 trecho de alto impacto por slide (+1 secundario no maximo) — verdade incomoda, identificacao, tensao, frase memoravel ou palavra-chave forte (refem, caos, processo, autoridade, improviso, conflito). NUNCA mais de 2 por slide; destacar demais tira a forca.\n"
         f"- CTA: no ultimo slide, marque a acao principal entre [[ ]] (ex: '[[Salva esse post]] pra usar depois.').\n"
         f"- Cada slide interno: tipo + titulo (3-7 palavras) + body (1-3 frases curtas, max 35 palavras).\n"
+        f"- MICRO-TENSAO (retencao entre slides): os slides do MEIO terminam com um gancho que puxa o proximo (curiosidade, tensao, continuacao), nunca 100% fechados. Ex: 'Mas o problema comeca depois.', 'E e aqui que a gestao perde autoridade.', 'So que quase ninguem percebe isso.', 'Mas o pior ainda vem.'. Evite explicacao tecnica continua e slides conclusivos no meio. So o ULTIMO slide (CTA) e a frase final memoravel podem fechar.\n"
         f"- NUNCA cite numero de apartamento/unidade nem nome de condominio (real ou inventado) em nenhum slide ou legenda.\n"
         f"- Em posts educativos (mito, dado, tutorial, lista juridica): pelo menos UMA ancora — artigo (ex: 'Codigo Civil, art. 1.336'), decisao judicial (ex: 'STJ, REsp 1.699.022/SP, 2019') OU dado com fonte nomeada e datada.\n"
         f"{contexto}"
