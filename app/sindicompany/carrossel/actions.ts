@@ -493,3 +493,20 @@ export async function excluirCarrosselAction(carrosselId: string): Promise<void>
   revalidatePath("/sindicompany/carrossel");
   redirect("/sindicompany/carrossel");
 }
+
+// Exclusao em massa: recebe os ids selecionados (checkboxes name="ids").
+export async function excluirVariosCarrosseisAction(
+  formData: FormData,
+): Promise<void> {
+  await requireAuth();
+  const ids = formData.getAll("ids").map(String).filter(Boolean);
+  for (const id of ids) {
+    try {
+      await deleteCarrossel(id);
+    } catch (e) {
+      console.error("[carrossel] falha ao excluir (bulk):", id, e);
+    }
+  }
+  revalidatePath("/sindicompany/carrossel");
+  redirect("/sindicompany/carrossel");
+}
