@@ -1433,7 +1433,7 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"- HOOK DA CAPA (prioridade maxima): o titulo da capa e a frase que PARA O SCROLL — verdade incomoda, identificacao, tensao ou curiosidade. Curto, leitura instantanea no celular. NUNCA slogan corporativo ou frase que comeca devagar.\n"
         f"- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: 'WhatsApp [[nao e assembleia]].'. So no titulo da capa.\n"
         f"- ANCORAS DE ATENCAO (retencao): nos slides de conteudo, marque com [[ ]] no BODY no maximo 1 trecho de alto impacto por slide (+1 secundario no maximo) — verdade incomoda, identificacao, tensao, frase memoravel ou PALAVRA MAGNETICA (caos, silencio, pressao, desgaste, autoridade, conflito, refem, invisivel, bastidor, premium, processo, improviso, abandono, controle, presenca, sobrecarga, suporte, confianca, clareza, metodo, crise). NUNCA mais de 2 por slide.\n"
-        f"- CTA (ultimo slide): marque entre [[ ]] APENAS a ACAO curta (2 a 5 palavras: '[[Salva esse post]]', '[[Manda no grupo]]'), NUNCA uma frase inteira; o resto fica fora do [[ ]]. Continuacao natural da emocao, nunca 'curta e siga'. Escolha pela emocao: indignacao -> opiniao forte; identificacao -> experiencia pessoal; tensao -> debate; aprendizado -> salvar; indireta -> compartilhar; desejo -> aspiracional. EVITE repetir 'SIM ou NAO', 'Concorda?', 'O que acha?'.\n"
+        f"- CTA OBRIGATORIO: o ULTIMO slide e SEMPRE um CTA com chamada para acao EXPLICITA — nunca termine so com frase memoravel. Marque entre [[ ]] APENAS a ACAO curta (2 a 5 palavras: '[[Salva esse post]]', '[[Manda no grupo]]'), NUNCA uma frase inteira; o resto fica fora do [[ ]]. Continuacao natural da emocao, nunca 'curta e siga'. Escolha pela emocao: indignacao -> opiniao forte; identificacao -> experiencia pessoal; tensao -> debate; aprendizado -> salvar; indireta -> compartilhar; desejo -> aspiracional. EVITE repetir 'SIM ou NAO', 'Concorda?', 'O que acha?'.\n"
         f"- ESTRUTURA (siga este esqueleto emocional, encaixando o FORMATO/tema): {_ESTRUTURA_POR_SLIDES.get(n_slides, 'Hook -> dor -> verdade incomoda -> solucao -> frase memoravel + CTA')}. Slides RESPIRO usam tipo 'frase'. Alterne o tom (tensao, identificacao, reflexao); nunca o mesmo por varios slides. Use MINI PLOT TWIST quando couber.\n"
         f"- VOZ HUMANA: frases falaveis, ritmo oral, sem juridiques nem academiques. EFEITO ESPELHO: ao menos 1 frase que faca pensar 'isso sou eu'. AUTORIDADE INVISIVEL: nunca dizer 'somos referencia'; a autoridade aparece na clareza e na observacao humana.\n"
         f"- IMPERFEICAO HUMANA: nao soe polido demais o tempo todo. Use frases secas, curtas, quebradas quando couber ('E ai comeca o problema.', 'E isso pesa.'). Parece escrito por alguem de DENTRO, nao por IA.\n"
@@ -8178,6 +8178,18 @@ def gerar_carrossel(carrossel_id: str) -> int:
             slides = copy["slides"]
             legenda = copy.get("legenda") or ""
             print(f"[carrossel] copy gerado pelo engine: {len(slides)} slides", flush=True)
+
+        # Remove slides TOTALMENTE vazios (o normalizador preenche com
+        # {tipo:texto, titulo:'', body:''} quando o modelo devolve menos
+        # slides que o pedido). Sem isso, o ultimo slide sai em branco e o
+        # CTA "some". Apos o filtro, o ultimo slide real volta a ser o CTA.
+        slides = [
+            s
+            for s in slides
+            if isinstance(s, dict)
+            and ((str(s.get("titulo") or "").strip()) or (str(s.get("body") or "").strip()))
+        ]
+        print(f"[carrossel] {len(slides)} slides com conteudo (vazios removidos)", flush=True)
 
         # 1b. Humanizer + revisão pt-BR — todas as marcas.
         # Roda DEPOIS da copy selecionada e ANTES do render dos slides.
