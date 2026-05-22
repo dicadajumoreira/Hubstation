@@ -1154,7 +1154,7 @@ FORMATO_INSTRUCOES = {
     "historia_real": (
         "FORMATO: HISTORIA REAL (o que mais engaja e salva).\n"
         "- De um NOME PROPRIO brasileiro ao personagem, variando a cada roteiro (nunca use sempre o mesmo nome), nunca 'um morador'.\n"
-        "- Detalhes concretos: '6 kg', '4 horas', '23%', 'Ap. 8B'.\n"
+        "- Detalhes concretos: '6 kg', '4 horas', '23%'. Se citar unidade/apto, VARIE o numero a cada roteiro; nunca repita sempre o mesmo.\n"
         "- A historia tem virada: setup -> conflito -> descoberta -> resolucao.\n"
         "- Personagens/situacoes podem ser compostos. NUNCA invente condominios/enderecos reais.\n"
         "ESTRUTURA: 1(capa) hook no momento de tensao maxima, sem resolver. "
