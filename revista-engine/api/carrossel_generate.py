@@ -959,7 +959,71 @@ def _palette() -> dict[str, str]:
     return base
 
 
-def _fetch_marca(slug: str) -> dict[str, Any] | None:
+def _rel_lum(hexc: str) -> float:
+    """Luminancia relativa (WCAG) de um hex #rrggbb. 0=preto, 1=branco."""
+    h = (hexc or "").lstrip("#")
+    if len(h) != 6:
+        return 0.0
+    try:
+        r, g, b = (int(h[i : i + 2], 16) / 255 for i in (0, 2, 4))
+    except ValueError:
+        return 0.0
+
+    def lin(c: float) -> float:
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+
+
+def _contrast(a: str, b: str) -> float:
+    """Razao de contraste WCAG entre duas cores (1 a 21)."""
+    la, lb = _rel_lum(a), _rel_lum(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _adjust_for_contrast(color: str, bg: str, target: float) -> str:
+    """Escurece (fundo claro) ou clareia (fundo escuro) a cor ate atingir
+    o contraste alvo no fundo, mantendo o tom. Pra paletas pastel, em que
+    nenhuma cor cromatica contrasta sozinha em fundo claro."""
+    h = color.lstrip("#")
+    if len(h) != 6:
+        return color
+    r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+    darken = _rel_lum(bg) > 0.35
+    for _ in range(24):
+        cur = f"#{r:02x}{g:02x}{b:02x}"
+        if _contrast(cur, bg) >= target:
+            return cur
+        if darken:
+            r, g, b = int(r * 0.85), int(g * 0.85), int(b * 0.85)
+        else:
+            r, g, b = (
+                r + int((255 - r) * 0.15),
+                g + int((255 - g) * 0.15),
+                b + int((255 - b) * 0.15),
+            )
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def _pick_title_color(bg: str, fg: str, p: dict[str, str]) -> str:
+    """Cor do TITULO, distinta da cor do corpo (fg), pra criar hierarquia
+    cromatica em TODO slide. Escolhe a cor cromatica da marca com melhor
+    contraste no fundo; se nenhuma chega a 3:1 (paleta pastel em fundo
+    claro), escurece/clareia a melhor delas ate ficar legivel. So cai em
+    fg se a marca nao tiver nenhuma cor cromatica. Vale pra qualquer paleta."""
+    cands = [
+        c
+        for c in (p.get(k) for k in ("mint", "purple", "sand", "lavender"))
+        if c and c.lower() != bg.lower()
+    ]
+    if not cands:
+        return fg
+    cands.sort(key=lambda c: _contrast(c, bg), reverse=True)
+    best = cands[0]
+    if _contrast(best, bg) >= 3.0:
+        return best
+    return _adjust_for_contrast(best, bg, 4.0)
     """Le a marca do Supabase (paleta, bucket_prefix, handle) numa query.
     Qualquer falha (marca ausente, erro de rede) cai em None -> identidade
     chumbada. Mantem zero regressao independente do estado do banco."""
@@ -6959,6 +7023,10 @@ def _slide_html(
     else:
         badge_label = f"{slide_idx} / {total}"
 
+    # Cor do titulo distinta do corpo (fg_color) -> hierarquia cromatica.
+    # Puxada da paleta da marca por contraste; cai em fg se nada servir.
+    titulo_color = _pick_title_color(bg_color, fg_color, p)
+
     body_html = (
         f'<p class="slide-body">{_h_with_data(body, is_consvicta)}</p>'
         if body
@@ -7164,7 +7232,7 @@ def _slide_html(
     font-size: {(titulo_font + 30) if is_consvicta else titulo_font}px;
     line-height: {1.02 if is_consvicta else 0.95};
     letter-spacing: -0.015em;
-    color: {fg_color};
+    color: {titulo_color};
     margin-bottom: 56px;
     text-wrap: balance;
     max-width: 18ch;
