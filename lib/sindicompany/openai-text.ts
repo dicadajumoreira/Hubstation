@@ -112,6 +112,31 @@ const FORMATO_INSTRUCOES: Record<string, string> = {
     `- Quase todos os slides são tipo "frase" (limpo, centralizado). Nada de parágrafo.\n` +
     `- Pensado pra print/repost e branding. Máx 1 ideia por slide.\n` +
     `- CTA leve de compartilhamento.`,
+  expectativa_realidade:
+    `FORMATO: EXPECTATIVA VS REALIDADE (humor + identificação).\n` +
+    `- Capa apresenta a EXPECTATIVA idealizada; os slides seguintes mostram a REALIDADE absurda/caótica, com humor leve.\n` +
+    `- Contraste forte e identificável entre o que se imagina e o que acontece de verdade. Ótimo pra meme/compartilhamento.\n` +
+    `- Fechamento com reflexão leve. CTA de compartilhamento/marcação.`,
+  erro_fatal:
+    `FORMATO: ERRO FATAL (medo de errar).\n` +
+    `- Capa nomeia O erro que custa caro (ex: "O erro que destrói assembleias."). \n` +
+    `- Mostra a consequência, AMPLIFICA o prejuízo/risco, depois entrega a solução prática.\n` +
+    `- Ativa culpa/medo de prejuízo + utilidade. CTA de salvamento.`,
+  bastidor:
+    `FORMATO: BASTIDOR REAL (documental, humaniza).\n` +
+    `- Mostra o bastidor real de uma situação (visita técnica, reunião difícil, vistoria) + um DETALHE INVISÍVEL que só quem vive percebe.\n` +
+    `- Sensação real e próxima, percepção premium. Tom de quem está dentro, não de quem ensina de fora.\n` +
+    `- Termina em reflexão/frase forte. CTA de identificação ou autoridade.`,
+  camada_invisivel:
+    `FORMATO: CAMADA INVISÍVEL (profundidade emocional).\n` +
+    `- Parte de uma situação comum e revela a CAMADA emocional escondida por trás dela (ex: "muita reclamação nasce do cansaço").\n` +
+    `- Provoca o "nunca pensei nisso". Verdade humana forte + frase memorável. Altamente compartilhável.\n` +
+    `- CTA emocional / de compartilhamento.`,
+  dialogo:
+    `FORMATO: DIÁLOGO (conversa).\n` +
+    `- Troca curta de falas entre dois personagens, com os falantes nomeados no início de cada fala (ex: body "Morador: Mas é rapidinho." / próximo slide body "Síndico: Todo problema começa com rapidinho.").\n` +
+    `- Escalada emocional e um PUNCH na última fala. Leitura rápida, humana, ótima pra print.\n` +
+    `- NÃO usar nome de condomínio nem nº de unidade. CTA de identificação.`,
 };
 
 interface ChatOk {

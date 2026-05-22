@@ -91,7 +91,12 @@ export type CarrosselFormato =
   | "opiniao"
   | "hook_punch"
   | "pov"
-  | "tweet";
+  | "tweet"
+  | "expectativa_realidade"
+  | "erro_fatal"
+  | "bastidor"
+  | "camada_invisivel"
+  | "dialogo";
 
 export const CARROSSEL_FORMATOS: {
   id: CarrosselFormato;
@@ -108,6 +113,11 @@ export const CARROSSEL_FORMATOS: {
   { id: "hook_punch", label: "Hook Punch", hint: "Frases curtas, alto impacto, ritmo rápido" },
   { id: "pov", label: "POV", hint: "Identificação extrema: 'isso sou eu'" },
   { id: "tweet", label: "Tweet style", hint: "Frase curta, printável, repostável" },
+  { id: "expectativa_realidade", label: "Expectativa vs Realidade", hint: "Humor e identificação" },
+  { id: "erro_fatal", label: "Erro fatal", hint: "Medo de errar + solução" },
+  { id: "bastidor", label: "Bastidor real", hint: "Documental, humaniza a marca" },
+  { id: "camada_invisivel", label: "Camada invisível", hint: "Profundidade: 'nunca pensei nisso'" },
+  { id: "dialogo", label: "Diálogo", hint: "Conversa com punch final" },
 ];
 
 const FORMATO_IDS = new Set(CARROSSEL_FORMATOS.map((f) => f.id));
