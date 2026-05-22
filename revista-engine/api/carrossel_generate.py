@@ -7426,10 +7426,12 @@ def _slide_html(
 
 
 def _h(s: str) -> str:
-    # Remove os marcadores de hook [[...]] (so a capa os renderiza como
-    # destaque; em qualquer outro contexto viram texto limpo).
-    s = (s or "").replace("[[", "").replace("]]", "")
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    esc = (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    # Marcador [[...]] -> destaque generico (.hl, estilo injetado
+    # globalmente no render). Cobre TODOS os templates (capa classica,
+    # internos e os ~20 arquetipos) sem editar cada um, pra qualquer marca
+    # atual ou futura. Texto sem marcador nao muda.
+    return _HOOK_PATTERN.sub(r'<span class="hl">\1</span>', esc)
 
 
 # Marcador do trecho-chave do hook na capa: WhatsApp [[nao e assembleia]].
@@ -7490,6 +7492,18 @@ def _h_with_data(s: str, enabled: bool) -> str:
 # =============================================================================
 
 
+# Estilo do destaque generico .hl, injetado em TODO slide no render — cobre
+# capa classica, internos e os ~20 arquetipos sem editar cada template.
+# Marca-texto na cor do PROPRIO texto (color-mix) + peso: adapta a qualquer
+# fundo/cor/marca. Degrada pra so-negrito se o navegador ignorar color-mix.
+_HL_STYLE = (
+    "<style>.hl{font-weight:800;"
+    "background-image:linear-gradient(transparent 58%,"
+    "color-mix(in srgb, currentColor 22%, transparent) 58%);"
+    "background-repeat:no-repeat;border-radius:4px}</style>"
+)
+
+
 def _render_slide_png(html: str) -> bytes:
     """Renderiza HTML em PNG 3072×3839 via Playwright sync.
 
@@ -7508,7 +7522,12 @@ def _render_slide_png(html: str) -> bytes:
                 device_scale_factor=1,
             )
             page = ctx.new_page()
-            page.set_content(html, wait_until="networkidle")
+            html_out = (
+                html.replace("</head>", _HL_STYLE + "</head>", 1)
+                if "</head>" in html
+                else _HL_STYLE + html
+            )
+            page.set_content(html_out, wait_until="networkidle")
             # Aguarda TODAS as fontes (incluindo as inline base64) ficarem
             # prontas pro layout. document.fonts.ready resolve quando o
             # FontFaceSet termina de carregar todas as font-face
