@@ -1240,9 +1240,11 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
     is_by = _BRAND == "bysindicompany"
     is_consvicta = _BRAND == "consvictabr"
     obj_map_sindico = {
-        "comentarios": "OBJETIVO: GERAR COMENTARIOS. CTA SEMPRE binario (SIM/NAO, "
-        "CONCORDO/DISCORDO, MORADOR CERTO/SINDICO CERTO). Tema com dois lados "
-        "defensaveis. Ultimo slide nomeia os dois lados. Sucesso = debate, nao alcance.",
+        "comentarios": "OBJETIVO: GERAR COMENTARIOS. CTA que gera DEBATE, coerente "
+        "com a emocao — opiniao forte, posicionamento ou dilema (ex: 'Isso e "
+        "convivencia ou abuso?', 'Ate onde vai o limite?', 'O problema comeca em "
+        "quem?'). Binario SIM/NAO so quando a discussao for de fato binaria; nao "
+        "repita sempre. Tema com dois lados defensaveis. Sucesso = debate, nao alcance.",
         "salvamentos": "OBJETIVO: GERAR SALVAMENTOS. Conteudo util e confiavel, "
         "linguagem objetiva. Ancore lei/artigo/numero. CTA 'Salva esse post' / "
         "'Manda no grupo do condominio'. Nunca CTA de debate.",
@@ -1366,7 +1368,7 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"- HOOK DA CAPA (prioridade maxima): o titulo da capa e a frase que PARA O SCROLL — verdade incomoda, identificacao, tensao ou curiosidade. Curto, leitura instantanea no celular. NUNCA slogan corporativo ou frase que comeca devagar.\n"
         f"- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: 'WhatsApp [[nao e assembleia]].'. So no titulo da capa.\n"
         f"- ANCORAS DE ATENCAO (retencao): nos slides de conteudo, marque com [[ ]] no BODY no maximo 1 trecho de alto impacto por slide (+1 secundario no maximo) — verdade incomoda, identificacao, tensao, frase memoravel ou PALAVRA MAGNETICA (caos, silencio, pressao, desgaste, autoridade, conflito, refem, invisivel, bastidor, premium, processo, improviso, abandono, controle, presenca, sobrecarga, suporte, confianca, clareza, metodo, crise). NUNCA mais de 2 por slide.\n"
-        f"- CTA (ultimo slide): marque a acao entre [[ ]], continuacao natural da emocao, nunca 'curta e siga'. Tipos: identificacao ('Comenta [[EU]] se ja viveu isso.'), indireta ('[[Compartilha no grupo]] do condominio.'), salvamento ('[[Salva]] pra lembrar.'), autoridade ('Gestao premium comeca nos [[detalhes]].').\n"
+        f"- CTA (ultimo slide): marque a acao entre [[ ]], CONTINUACAO natural da emocao, nunca 'curta e siga'. Escolha pela emocao: indignacao -> opiniao forte/dilema; identificacao -> experiencia pessoal ('Qual situacao parecida voce ja viveu?'); tensao -> debate; aprendizado -> salvar ('[[Salva]] pra proxima assembleia.'); indireta -> compartilhar ('[[Manda no grupo]] de quem precisa ouvir.'); desejo -> aspiracional. EVITE repetir 'SIM ou NAO', 'Concorda?', 'O que acha?' — binario so quando a discussao for de fato binaria.\n"
         f"- ARCO EMOCIONAL (por nº de slides): construa um arco sem meio morno — hook -> amplificacao da dor -> situacao/identificacao -> verdade incomoda -> consequencia -> novo olhar/solucao -> frase memoravel -> CTA, encaixando em {n_slides} slides. Alterne o tom (tensao, identificacao, reflexao); nunca o mesmo por varios slides. Use MINI PLOT TWIST quando couber ('parecia X. Nunca foi sobre X. Era sobre Y.').\n"
         f"- VOZ HUMANA: frases falaveis, ritmo oral, sem juridiques nem academiques. EFEITO ESPELHO: ao menos 1 frase que faca pensar 'isso sou eu'. AUTORIDADE INVISIVEL: nunca dizer 'somos referencia'; a autoridade aparece na clareza e na observacao humana.\n"
         f"- Cada slide interno: tipo + titulo (3-7 palavras) + body (1-3 frases curtas, max 35 palavras).\n"
