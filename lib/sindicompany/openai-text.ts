@@ -289,6 +289,62 @@ function temperaturaGuidance(t: number | null | undefined): string {
   return `- TEMPERATURA EMOCIONAL: ${n}/10 (${band}). Calibre hook, CTA, escolha de palavras, ritmo e intensidade a esse nível.\n`;
 }
 
+// Garante UM destaque [[ ]] num texto sem nenhum (deterministico). Destaca
+// a ultima clausula/frase (o "payoff"). Espelha _auto_hook do engine.
+function autoHook(text: string): string {
+  const t = (text || "").trim();
+  if (!t || t.includes("[[")) return text;
+  const sents = t.split(/(?<=[.!?])\s+/);
+  let prefix = "";
+  let base = t;
+  if (sents.length > 1 && sents[sents.length - 1].split(/\s+/).length >= 2) {
+    base = sents[sents.length - 1];
+    prefix = t.slice(0, t.lastIndexOf(base));
+  }
+  const words = base.split(/\s+/);
+  if (words.length < 2) return text;
+  let head = "";
+  let tail = "";
+  const m = base.match(/[,;:]\s+([^,;:]{3,})$/);
+  const mWords = m ? m[1].split(/\s+/).length : 0;
+  if (m && mWords >= 2 && mWords <= 7) {
+    head = base.slice(0, base.length - m[1].length);
+    tail = m[1];
+  } else {
+    const n = Math.max(2, Math.min(6, Math.round(words.length * 0.6)));
+    head = words.slice(0, words.length - n).join(" ");
+    head = head ? head + " " : "";
+    tail = words.slice(words.length - n).join(" ");
+  }
+  const pm = tail.trim().match(/^(.*?)([.!?,;:]*)$/);
+  const core = pm ? pm[1] : tail.trim();
+  const punct = pm ? pm[2] : "";
+  if (!core) return text;
+  return `${prefix}${head}[[${core}]]${punct}`;
+}
+
+// Rede de seguranca: garante [[ ]] na capa (titulo) e nos slides de conteudo
+// (body). CTA e slides "frase"/respiro ficam por conta do modelo.
+function ensureHooks(slides: CarrosselSlide[]): CarrosselSlide[] {
+  const total = slides.length;
+  slides.forEach((s, i) => {
+    const tipo = (s.tipo || "").trim().toLowerCase();
+    const isCapa = tipo === "capa" || i === 0;
+    const isCta = tipo === "cta" || i === total - 1;
+    const isFrase = ["frase", "respiro", "quote"].includes(tipo);
+    if (isCapa) {
+      const tit = s.titulo || "";
+      if (!tit.includes("[[") && !tit.includes("~~")) s.titulo = autoHook(tit);
+    } else if (!isCta && !isFrase) {
+      const body = s.body || "";
+      if (body.trim() && !body.includes("[[") && !body.includes("~~")) {
+        s.body = autoHook(body);
+      }
+    }
+  });
+  return slides;
+}
+
 // Esqueleto emocional por quantidade de slides (estrutura ideal). O modelo
 // segue este arco e encaixa o FORMATO/tema dentro. RESPIRO = slide tipo
 // "frase" (limpo, centralizado). Último slide = sempre CTA.
@@ -460,7 +516,10 @@ export async function gerarTresCopies(input: {
     while (slides.length < input.n_slides) {
       slides.push({ tipo: "texto", titulo: "", body: "" });
     }
-    return { slides, legenda: o.legenda ?? "" };
+    // Garante o destaque [[ ]] em TODAS as 3 copies (o modelo as vezes
+    // esquece numa delas — ex: copy 3). Mesma logica deterministica do
+    // engine, aplicada aqui pro preview tambem mostrar o realce.
+    return { slides: ensureHooks(slides), legenda: o.legenda ?? "" };
   });
   return { ok: true, copies: normalized };
 }

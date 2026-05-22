@@ -10,6 +10,8 @@ import { listMarcas } from "@/lib/sindicompany/marcas-db";
 import { describeError } from "@/lib/sindicompany/errors";
 import { DashboardShell } from "../shell";
 import { CarrosselRowActions } from "./row-actions";
+import { BulkDeleteBar } from "./bulk-delete-bar";
+import { excluirVariosCarrosseisAction } from "./actions";
 
 const STATUS_LABELS: Record<Carrossel["status"], string> = {
   rascunho: "Rascunho",
@@ -115,10 +117,16 @@ export default async function CarrosseisPage() {
         )}
 
         {carrosseis.length > 0 && (
-          <div className="rounded-xl border border-onix-100 bg-white overflow-x-auto">
+          <form
+            action={excluirVariosCarrosseisAction}
+            className="rounded-xl border border-onix-100 bg-white overflow-hidden"
+          >
+            <BulkDeleteBar />
+            <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[840px]">
               <thead className="bg-onix-50">
                 <tr>
+                  <th className="w-10 px-5 py-3"></th>
                   <th className="text-left font-semibold text-onix-900 px-5 py-3">
                     Marca
                   </th>
@@ -151,6 +159,15 @@ export default async function CarrosseisPage() {
                     key={c.id}
                     className="border-t border-onix-100 hover:bg-onix-50/50"
                   >
+                    <td className="px-5 py-3">
+                      <input
+                        type="checkbox"
+                        name="ids"
+                        value={c.id}
+                        className="carrossel-check rounded border-onix-300"
+                        aria-label={`Selecionar ${c.titulo}`}
+                      />
+                    </td>
                     <td className="px-5 py-3">
                       <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-onix-100 text-onix-800">
                         {handlePorMarca.get(c.brand ?? "") ??
@@ -187,7 +204,8 @@ export default async function CarrosseisPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </form>
         )}
       </main>
     </DashboardShell>
