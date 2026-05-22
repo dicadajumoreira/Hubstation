@@ -133,8 +133,9 @@ export async function iniciarCarrosselAction(formData: FormData): Promise<void> 
   const formato = getStr(formData, "formato");
   const briefing = getStr(formData, "briefing");
   const n_slides_raw = parseInt(getStr(formData, "n_slides"), 10);
+  // Carrosseis tem de 5 a 10 slides. Fora disso, clampa pro intervalo.
   const n_slides = Number.isFinite(n_slides_raw)
-    ? Math.max(1, Math.min(10, n_slides_raw))
+    ? Math.max(5, Math.min(10, n_slides_raw))
     : 6;
   const coverArchetypeRaw = getStr(formData, "cover_archetype");
   const cover_archetype = isValidCoverArchetype(coverArchetypeRaw)
