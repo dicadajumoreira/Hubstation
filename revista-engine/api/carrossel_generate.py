@@ -7890,6 +7890,7 @@ def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
     global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE, _BRAND_PREFIX, _BRAND_HANDLE
     global _BRAND_TIPOGRAFIA, _BRAND_NAME
+    global _SC_NAVY, _SC_CYAN, _SC_BEIGE, _SC_LAVENDER, _SC_PURPLE, _SC_PAPER, _SC_PAPER_WARM
     print(f"[carrossel] iniciando geração de {carrossel_id}", flush=True)
     try:
         carrossel = _fetch_carrossel(carrossel_id)
@@ -7919,6 +7920,22 @@ def gerar_carrossel(carrossel_id: str) -> int:
                 f"[carrossel] paleta do DB ({len(_BRAND_PALETTE)} cores)",
                 flush=True,
             )
+
+        # Arquetipos de capa (Brand Hub) usam as constantes _SC_* (cores
+        # Sindicompany) chumbadas em ~283 lugares. Pra MARCA NOVA, remapeia
+        # essas constantes pra paleta da marca de uma vez — todos os
+        # arquetipos passam a seguir as cores da marca. Sindicompany/By
+        # mantem as cores originais (zero regressao); Consvicta nao usa
+        # arquetipos.
+        if _BRAND not in ("sindicompanybr", "bysindicompany"):
+            _pal = _palette()
+            _SC_NAVY = _pal["onix"]
+            _SC_CYAN = _pal["mint"]
+            _SC_BEIGE = _pal["sand"]
+            _SC_LAVENDER = _pal["lavender"]
+            _SC_PURPLE = _pal.get("purple") or _pal["mint"]
+            _SC_PAPER = _pal["gray_5"]
+            _SC_PAPER_WARM = _pal["gray_5"]
 
         # Tipografia data-driven só pra marca nova; as 3 chumbadas seguem
         # com as fontes embutidas. Query separada (vide _fetch_marca_tipografia).
