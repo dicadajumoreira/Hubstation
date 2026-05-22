@@ -271,6 +271,24 @@ const OBJETIVO_INSTRUCOES: Record<string, string> = {
     `- CTA depende do tema: muito útil → "Salva esse post"; divide opiniões → CTA binário.`,
 };
 
+// Temperatura emocional (0-10) -> instrucao de intensidade pro prompt.
+// Vazio/null = neutro (sem linha; a persona manda).
+function temperaturaGuidance(t: number | null | undefined): string {
+  if (t == null || Number.isNaN(t)) return "";
+  const n = Math.max(0, Math.min(10, Math.round(t)));
+  const band =
+    n <= 2
+      ? "institucional — tom sóbrio e contido, sem provocação; foco em clareza e autoridade"
+      : n <= 4
+        ? "leve — tom calmo e acessível, pouca tensão"
+        : n <= 6
+          ? "emocional — equilíbrio entre razão e emoção, identificação"
+          : n <= 8
+            ? "provocador — tensão alta, hooks afiados, opinião forte"
+            : "extremamente intenso — máxima provocação e tensão emocional, sem amenizar";
+  return `- TEMPERATURA EMOCIONAL: ${n}/10 (${band}). Calibre hook, CTA, escolha de palavras, ritmo e intensidade a esse nível.\n`;
+}
+
 // Esqueleto emocional por quantidade de slides (estrutura ideal). O modelo
 // segue este arco e encaixa o FORMATO/tema dentro. RESPIRO = slide tipo
 // "frase" (limpo, centralizado). Último slide = sempre CTA.
@@ -372,6 +390,7 @@ export async function gerarTresCopies(input: {
     `VOZ: siga a persona da marca (system prompt) — tom, público, o que viraliza, o que nunca fazer. A ASSINATURA "${assinatura}" aparece SÓ na legenda, nunca nos slides.\n` +
     `ESTRUTURA: use o FORMATO acima e EXATAMENTE ${input.n_slides} slides. Se a persona sugerir outra contagem/estrutura, o FORMATO e a quantidade de slides deste post MANDAM.\n\n` +
     `REGRAS:\n` +
+    temperaturaGuidance(marca?.temperatura) +
     `- Capa: o tema "${input.tema}" aparece literal ou em paráfrase clara. Capa inteira (titulo + body) tem no máximo 20 palavras.\n` +
     `- HOOK DA CAPA (prioridade máxima): o título da capa é a frase que PARA O SCROLL — verdade incômoda, identificação, tensão ou curiosidade. Curto, leitura instantânea no celular. NUNCA slogan corporativo, frase genérica ou que começa devagar; deve funcionar sozinho, sem depender de contexto.\n` +
     `- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: "WhatsApp [[não é assembleia]].", "O síndico cansado começa a [[perder autoridade]].". Marque [[ ]] APENAS no título da capa (slide 1), nunca nos outros slides nem na legenda.\n` +
