@@ -641,3 +641,18 @@ def divider_css(style: str, color: str) -> str:
         "height:0;border-radius:0;",
     }
     return styles.get(style, styles["solid"])
+
+
+# ---------------------------------------------------------------------------
+# Aspas editoriais (familia "Elementos") — slide de frase/respiro
+# ---------------------------------------------------------------------------
+def sc_quote_mark_html(
+    color: str, *, size: int = 360, font: str = "'Epilogue', sans-serif"
+) -> str:
+    """Aspa de abertura grande pra slide de frase/respiro (tratamento de
+    citacao editorial). Centralizada; margem negativa puxa a frase pra perto."""
+    return (
+        f'<div style="font-family:{font};font-weight:800;font-size:{size}px;'
+        f"line-height:0.62;color:{color};opacity:0.9;margin-bottom:-0.12em;"
+        f'pointer-events:none">“</div>'
+    )

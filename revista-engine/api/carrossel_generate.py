@@ -7289,6 +7289,14 @@ def _slide_html(
         if _BRAND == "sindicompanybr"
         else f"background:{accent};height:6px;border-radius:3px;"
     )
+    # Elemento "aspas" no slide de frase/respiro (tratamento de citacao).
+    # Usa o accent DA MARCA (varia por marca). Consvicta tem estetica
+    # propria -> nao recebe.
+    quote_mark_div = (
+        brand_kit.sc_quote_mark_html(accent)
+        if (is_frase and not is_consvicta)
+        else ""
+    )
 
     body_html = (
         f'<p class="slide-body">{_h_hook(body, is_consvicta, "cta-acao" if is_cta else "body-hl")}</p>'
@@ -7712,8 +7720,9 @@ def _slide_html(
   <div class="frame-corner"></div>
   {_slide_pagination(slide_idx, total, is_frase, accent, fg_color, font_numeric)}
   <div class="content">
+    {quote_mark_div}
     {('' if is_frase else f'<span class="badge">{_h(badge_label)}</span>')}
-    {('' if is_frase else '<div class="accent-line"></div>')}
+    {('' if is_frase else f'<div class="accent-line"></div>')}
     <h2 class="slide-titulo">{_h_with_data(titulo, is_consvicta)}</h2>
     {('' if is_frase else body_html)}
   </div>
