@@ -7173,17 +7173,25 @@ def _slide_html(
         accent = p["mint"]
         accent_text = p["onix"]
     else:
-        pares = [p["mint"], p["sand"]]
-        impares = [p["lavender"], p["white"], p["gray_5"]]
-        if slide_idx % 2 == 0:
-            bg_color = pares[(slide_idx // 2 - 1) % len(pares)]
+        if _BRAND == "sindicompanybr" and not is_frase:
+            # Fundo limpo do Brand Kit: base off-white (alterna Paper /
+            # Paper Warm pra variedade sutil) + glow por cima. Substitui o
+            # ciclo de cores solidas antigo.
+            bg_color = (
+                p["gray_5"] if slide_idx % 2 == 0 else brand_kit.NEUTRALS["paper_warm"]
+            )
         else:
-            bg_color = impares[((slide_idx - 1) // 2 - 1) % len(impares)]
+            pares = [p["mint"], p["sand"]]
+            impares = [p["lavender"], p["white"], p["gray_5"]]
+            if slide_idx % 2 == 0:
+                bg_color = pares[(slide_idx // 2 - 1) % len(pares)]
+            else:
+                bg_color = impares[((slide_idx - 1) // 2 - 1) % len(impares)]
 
         fg_color = p["onix"]
-        # Accent: nas cores muito claras (white / gray_5) usa mint pra
-        # destacar; nas medias (mint / sand / lavender) usa onix solido.
-        if bg_color in (p["white"], p["gray_5"]):
+        # Accent: nas cores muito claras (white / gray_5 / paper warm) usa
+        # mint pra destacar; nas medias (mint / sand / lavender) usa onix.
+        if bg_color in (p["white"], p["gray_5"], brand_kit.NEUTRALS["paper_warm"]):
             accent = p["mint"]
             accent_text = p["onix"]
         else:
@@ -7239,7 +7247,11 @@ def _slide_html(
     # - Slides internos: pattern ciclando, tile 800x800, 10% opacity
     # - CTA (ultimo): Consvicta usa picker dark; outras marcas fixam
     #   Pattern 1 (legado). Mesma regra tile/opacity.
-    if is_cta:
+    # Sindicompany: NAO usa o tile antigo — o watermark de canto (Brand Kit)
+    # ja e a textura da marca; o tile competiria com glow/gradiente.
+    if _BRAND == "sindicompanybr":
+        pattern_url = ""
+    elif is_cta:
         if is_consvicta:
             pattern_url = _pattern_for_slide(slide_idx, is_cta=True)
         else:
