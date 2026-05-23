@@ -11,19 +11,43 @@
 // - Icons: stroke 1.5 paramétrico via símbolo recolorível.
 
 export const SINDICOMPANY_LIBRARY_LOGOS: ReadonlyArray<string> = [
+  "sindicompany-horizontal-color.png",
+  "sindicompany-horizontal-white.png",
+  "sindicompany-horizontal-cyan.png",
+  "sindicompany-horizontal-lavender.png",
+  "sindicompany-horizontal-dark.png",
   "mask-houses.png",
   "mask-dot.png",
   "mask-outer-filled.png",
-  "sindicompany-horizontal-dark.png",
+  "sindicompany-horizontal-color-2.png",
+  "sindicompany-horizontal-color-alt.png",
 ];
 
 export const SINDICOMPANY_LIBRARY_ICONS: ReadonlyArray<string> = [
-  // Vazio por enquanto. Ícones do Brand Hub são paramétricos (stroke 1.5
-  // recolorível). Adicionar PNGs/SVGs aqui quando assets/icons/ do ZIP
-  // forem extraídos.
+  "icon-cyan-beige.png",
+  "icon-beige-lavender.png",
+  "icon-dark.png",
+  "icon-white.png",
+  "icon-cyan-photo.png",
+  "icon-beige-photo.png",
 ];
 
 export const SINDICOMPANY_LIBRARY_PATTERNS: ReadonlyArray<string> = [
-  // Vazio por enquanto. Cantos coloridos (canto-{navy,cyan,beige,lavender,purple}.png)
-  // serão adicionados conforme upload manual ou extração futura do Brand Hub ZIP.
+  "canto-navy.png",
+  "canto-cyan.png",
+  "canto-beige.png",
+  "canto-lavender.png",
+  "canto-purple.png",
+  "criativo-direito-navy.png",
+  "criativo-direito-beige.png",
+  "criativo-direito-purple.png",
+  "criativo-esquerdo-navy.png",
+  "decorativo-navy-2.png",
+  "decorativo-beige-2.png",
+  "decorativo-purple-2.png",
+  "fundo-circ-navy.png",
+  "fundo-circ-cyan.png",
+  "fundo-circ-beige.png",
+  "fundo-geo-navy.png",
+  "fundo-geo-beige.png",
 ];
