@@ -463,38 +463,66 @@ def sc_symbol_photo_html(
 # opacidade baixa. Navy + cyan (built-in nos PNGs) = 2 cores, dentro do spec.
 
 # (arquivo, css de posicao/tamanho, opacidade)
-_DECOR_RECIPES = [
+# Formas (shape, template de arquivo, css de posicao, opacidade base).
+# {c} = cor do pattern (navy/beige/purple). Cada carrossel sorteia uma cor.
+_DECOR_SHAPES = [
     (
-        "canto-navy.png",
+        "canto",
+        "canto-{c}.png",
         "top:-60px;right:-60px;width:1240px;height:1240px;"
         "background-position:right top;background-size:contain",
         0.12,
     ),
     (
-        "criativo-direito-navy.png",
+        "criativo",
+        "criativo-direito-{c}.png",
         "top:50%;right:0;transform:translateY(-50%);width:920px;height:1110px;"
         "background-position:right center;background-size:contain",
         0.10,
     ),
     (
-        "decorativo-navy-2.png",
+        "decorativo",
+        "decorativo-{c}-2.png",
         "bottom:40px;right:120px;width:780px;height:1000px;"
         "background-position:right bottom;background-size:contain",
         0.10,
     ),
     (
-        "fundo-geo-navy.png",
+        "fundo_geo",
+        "fundo-geo-{c}.png",
         "left:0;right:0;bottom:0;height:720px;"
         "background-position:center bottom;background-size:cover",
         0.07,
     ),
     (
-        "fundo-circ-navy.png",
+        "fundo_circ",
+        "fundo-circ-{c}.png",
         "inset:0;background-position:center;background-size:1500px;"
         "background-repeat:repeat",
         0.035,
     ),
 ]
+
+# Quais formas existem por cor (cobertura do acervo).
+_COLOR_SHAPES = {
+    "navy": ["canto", "criativo", "decorativo", "fundo_geo", "fundo_circ"],
+    "beige": ["canto", "criativo", "decorativo", "fundo_geo", "fundo_circ"],
+    "purple": ["canto", "criativo", "decorativo"],
+}
+
+# Beige e claro -> precisa de mais opacidade pra aparecer no fundo Paper.
+_COLOR_OP_SCALE = {"navy": 1.0, "purple": 1.0, "beige": 1.9}
+
+# Cores de pattern que aparecem bem sobre o fundo claro do conteudo.
+PATTERN_COLORS = ["navy", "purple", "beige"]
+
+
+def pick_pattern_color(seed: str) -> str:
+    """Cor do pattern do carrossel (varia o feed; mesma no carrossel todo)."""
+    if not seed:
+        return PATTERN_COLORS[0]
+    h = sum(ord(c) for c in str(seed)) + 3
+    return PATTERN_COLORS[h % len(PATTERN_COLORS)]
 
 
 def sc_pattern_layer_html(filename: str, style_css: str, opacity: float) -> str:
@@ -508,13 +536,16 @@ def sc_pattern_layer_html(filename: str, style_css: str, opacity: float) -> str:
     )
 
 
-def sc_slide_decor_html(seed: str, slide_idx: int, p: dict, foto_url: str = "") -> str:
-    """Decoracao do slide de conteudo: rotaciona entre os patterns (forma +
-    posicao) e o acento symbolPhoto, deterministico por seed+slide. Da
-    variedade entre slides e entre carrosseis."""
-    # passo 1 (coprimo c/ o nº de slots) pra ciclar por TODAS as formas ao
-    # longo do carrossel, em vez de alternar so duas.
-    slots = list(range(len(_DECOR_RECIPES))) + ["photo"]
+def sc_slide_decor_html(
+    seed: str, slide_idx: int, p: dict, foto_url: str = "", color: str = "navy"
+) -> str:
+    """Decoracao do slide de conteudo: rotaciona entre as formas (na cor do
+    carrossel) e o acento symbolPhoto. Deterministico por seed+slide -> varia
+    entre slides e entre carrosseis."""
+    shapes = _COLOR_SHAPES.get(color, _COLOR_SHAPES["navy"])
+    scale = _COLOR_OP_SCALE.get(color, 1.0)
+    slots = list(shapes) + ["photo"]
+    # passo 1 (coprimo) pra ciclar por todas as formas no carrossel
     h = sum(ord(c) for c in str(seed)) + slide_idx
     slot = slots[h % len(slots)]
     if slot == "photo":
@@ -527,6 +558,7 @@ def sc_slide_decor_html(seed: str, slide_idx: int, p: dict, foto_url: str = "") 
                     f'<div style="position:absolute;top:170px;right:170px;'
                     f'z-index:1">{sp}</div>'
                 )
-        slot = 0  # sem foto -> cai no primeiro pattern
-    fn, css, op = _DECOR_RECIPES[slot]
-    return sc_pattern_layer_html(fn, css, op)
+        slot = shapes[0]  # sem foto -> cai na primeira forma
+    shape_def = next(s for s in _DECOR_SHAPES if s[0] == slot)
+    _, tmpl, css, op = shape_def
+    return sc_pattern_layer_html(tmpl.format(c=color), css, op * scale)
