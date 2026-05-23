@@ -610,3 +610,34 @@ def cta_acao_css(style: str, p: dict) -> str:
         ),
     }
     return styles.get(style, styles["pill_cyan"])
+
+
+# ---------------------------------------------------------------------------
+# Linhas decorativas (familia "Elementos") — divisor sob o badge
+# ---------------------------------------------------------------------------
+# Estilo do divisor varia por carrossel (solida/fina/tracejada/pontilhada/
+# dupla). Independe do conteudo -> seguro de aplicar automatico.
+
+LINE_STYLES = ["solid", "thin", "dashed", "dotted", "double"]
+
+
+def pick_line_style(seed: str) -> str:
+    if not seed:
+        return LINE_STYLES[0]
+    h = sum(ord(c) for c in str(seed)) + 5
+    return LINE_STYLES[h % len(LINE_STYLES)]
+
+
+def divider_css(style: str, color: str) -> str:
+    """Declaracoes CSS pro divisor (.accent-line) no estilo dado."""
+    styles = {
+        "solid": f"background:{color};height:6px;border-radius:3px;",
+        "thin": f"background:{color};height:2px;border-radius:2px;",
+        "dashed": f"background:none;border-top:6px dashed {color};"
+        "height:0;border-radius:0;",
+        "dotted": f"background:none;border-top:9px dotted {color};"
+        "height:0;border-radius:0;",
+        "double": f"background:none;border-top:10px double {color};"
+        "height:0;border-radius:0;",
+    }
+    return styles.get(style, styles["solid"])
