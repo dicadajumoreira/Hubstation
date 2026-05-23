@@ -338,3 +338,81 @@ def pick_symbol_colors(bg_is_dark: bool, p: dict) -> tuple[str, str]:
     if bg_is_dark:
         return p.get("white", "#FFFFFF"), beige
     return p.get("onix", "#182028"), beige
+
+
+# Geometria do ponto rastreada do master (svg-kit.jsx):
+#   relativo a largura: left = 0.642, diametro = 0.357
+#   relativo a altura:  top  = 0.683
+_DOT_LEFT = 0.642
+_DOT_TOP = 0.683
+_DOT_SIZE = 0.357
+
+
+def _photo_layer(url: str, mask_url: str, focus: str) -> str:
+    return (
+        f"position:absolute;inset:0;background:url({url}) center/cover;"
+        f"background-position:{focus};"
+        f"-webkit-mask-image:url({mask_url});mask-image:url({mask_url});"
+        "-webkit-mask-size:contain;mask-size:contain;"
+        "-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;"
+        "-webkit-mask-position:center;mask-position:center"
+    )
+
+
+def sc_symbol_window_html(
+    size_px: float,
+    photo_url: str,
+    dot_color: str,
+    *,
+    photo_focus: str = "50% 35%",
+) -> str:
+    """Foto preenchendo as FAIXAS da casa (recorte cookie-cutter) + ponto
+    solido ao lado. Visual editorial pra capas. '' se a mascara faltar."""
+    mh = _mask_data_url("mask-houses.png")
+    if not mh:
+        return ""
+    h = size_px * SYMBOL_RATIO
+    photo = f'<div style="{_photo_layer(photo_url, mh, photo_focus)}"></div>'
+    dot = (
+        f'<div style="position:absolute;left:{size_px * _DOT_LEFT:.1f}px;'
+        f"top:{h * _DOT_TOP:.1f}px;width:{size_px * _DOT_SIZE:.1f}px;"
+        f"height:{size_px * _DOT_SIZE:.1f}px;border-radius:50%;"
+        f'background:{dot_color}"></div>'
+    )
+    return (
+        f'<div style="position:relative;display:inline-block;flex-shrink:0;'
+        f'width:{size_px:.1f}px;height:{h:.1f}px">{photo}{dot}</div>'
+    )
+
+
+def sc_symbol_photo_html(
+    size_px: float,
+    house_color: str,
+    photo_url: str,
+    *,
+    photo_focus: str = "50% 30%",
+) -> str:
+    """Casas em cor solida + o PONTO e um recorte circular da foto.
+    '' se a mascara faltar."""
+    mh = _mask_data_url("mask-houses.png")
+    if not mh:
+        return ""
+    h = size_px * SYMBOL_RATIO
+    houses = (
+        f'<div style="position:absolute;inset:0;background:{house_color};'
+        f"-webkit-mask-image:url({mh});mask-image:url({mh});"
+        "-webkit-mask-size:contain;mask-size:contain;"
+        "-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;"
+        '-webkit-mask-position:center;mask-position:center"></div>'
+    )
+    dot = (
+        f'<div style="position:absolute;left:{size_px * _DOT_LEFT:.1f}px;'
+        f"top:{h * _DOT_TOP:.1f}px;width:{size_px * _DOT_SIZE:.1f}px;"
+        f"height:{size_px * _DOT_SIZE:.1f}px;border-radius:50%;overflow:hidden;"
+        f"background:url({photo_url}) center/cover;"
+        f'background-position:{photo_focus}"></div>'
+    )
+    return (
+        f'<div style="position:relative;display:inline-block;flex-shrink:0;'
+        f'width:{size_px:.1f}px;height:{h:.1f}px">{houses}{dot}</div>'
+    )
