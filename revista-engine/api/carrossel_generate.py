@@ -7279,6 +7279,17 @@ def _slide_html(
             corner_overlay_div = brand_kit.sc_corner_overlay_html(
                 "cyan", opacity=0.16, position="right top", size="38%"
             )
+        elif foto_capa_url and slide_idx % 2 == 1:
+            # Acento symbolPhoto: a foto da capa aparece no ponto do simbolo,
+            # no topo-direito. So em slides alternados (impares) pra continuar
+            # especial; os pares mantem o watermark de petala.
+            _sp = brand_kit.sc_symbol_photo_html(
+                500, p["onix"], foto_capa_url, photo_focus="50% 26%"
+            )
+            corner_overlay_div = (
+                f'<div style="position:absolute;top:160px;right:170px;'
+                f'z-index:1">{_sp}</div>'
+            )
         else:
             corner_overlay_div = brand_kit.sc_corner_overlay_html(
                 "navy", opacity=0.08, position="right top", size="36%"
