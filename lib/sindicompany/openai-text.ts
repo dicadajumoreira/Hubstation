@@ -513,10 +513,16 @@ export async function gerarTresCopies(input: {
     return { ok: false, error: lastErr || "IA não retornou nenhuma opção de copy." };
   }
   const normalized: CarrosselCopy[] = copiesRaw.map((o) => {
-    const slides = (o.slides ?? []).slice(0, input.n_slides);
-    while (slides.length < input.n_slides) {
-      slides.push({ tipo: "texto", titulo: "", body: "" });
-    }
+    // Mantém só slides COM conteúdo, até o limite pedido. NÃO preenche com
+    // vazios: slides em branco quebravam o carrossel quando o modelo
+    // devolvia menos slides que o pedido (comum pra >6 slides).
+    const slides = (o.slides ?? [])
+      .filter(
+        (s) =>
+          s &&
+          (String(s.titulo ?? "").trim() || String(s.body ?? "").trim()),
+      )
+      .slice(0, input.n_slides);
     // Garante o destaque [[ ]] em TODAS as 3 copies (o modelo as vezes
     // esquece numa delas — ex: copy 3). Mesma logica deterministica do
     // engine, aplicada aqui pro preview tambem mostrar o realce.
