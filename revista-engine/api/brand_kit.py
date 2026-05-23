@@ -432,3 +432,80 @@ def sc_symbol_photo_html(
         f'<div style="position:relative;display:inline-block;flex-shrink:0;'
         f'width:{size_px:.1f}px;height:{h:.1f}px">{houses}{dot}</div>'
     )
+
+
+# ---------------------------------------------------------------------------
+# Decoracao de slide — rotaciona forma/posicao do pattern por slide
+# ---------------------------------------------------------------------------
+# Em vez de repetir sempre a mesma petala, cada slide de conteudo recebe uma
+# forma/posicao diferente (canto, borda lateral, torre, faixa, tile) em
+# opacidade baixa. Navy + cyan (built-in nos PNGs) = 2 cores, dentro do spec.
+
+# (arquivo, css de posicao/tamanho, opacidade)
+_DECOR_RECIPES = [
+    (
+        "canto-navy.png",
+        "top:-60px;right:-60px;width:1240px;height:1240px;"
+        "background-position:right top;background-size:contain",
+        0.18,
+    ),
+    (
+        "criativo-direito-navy.png",
+        "top:50%;right:0;transform:translateY(-50%);width:920px;height:1110px;"
+        "background-position:right center;background-size:contain",
+        0.15,
+    ),
+    (
+        "decorativo-navy-2.png",
+        "bottom:40px;right:120px;width:780px;height:1000px;"
+        "background-position:right bottom;background-size:contain",
+        0.15,
+    ),
+    (
+        "fundo-geo-navy.png",
+        "left:0;right:0;bottom:0;height:720px;"
+        "background-position:center bottom;background-size:cover",
+        0.10,
+    ),
+    (
+        "fundo-circ-navy.png",
+        "inset:0;background-position:center;background-size:1500px;"
+        "background-repeat:repeat",
+        0.05,
+    ),
+]
+
+
+def sc_pattern_layer_html(filename: str, style_css: str, opacity: float) -> str:
+    url = _pattern_data_url(filename)
+    if not url:
+        return ""
+    return (
+        f'<div style="position:absolute;z-index:0;pointer-events:none;'
+        f"opacity:{opacity};background-image:url({url});"
+        f'background-repeat:no-repeat;{style_css}"></div>'
+    )
+
+
+def sc_slide_decor_html(seed: str, slide_idx: int, p: dict, foto_url: str = "") -> str:
+    """Decoracao do slide de conteudo: rotaciona entre os patterns (forma +
+    posicao) e o acento symbolPhoto, deterministico por seed+slide. Da
+    variedade entre slides e entre carrosseis."""
+    # passo 1 (coprimo c/ o nº de slots) pra ciclar por TODAS as formas ao
+    # longo do carrossel, em vez de alternar so duas.
+    slots = list(range(len(_DECOR_RECIPES))) + ["photo"]
+    h = sum(ord(c) for c in str(seed)) + slide_idx
+    slot = slots[h % len(slots)]
+    if slot == "photo":
+        if foto_url:
+            sp = sc_symbol_photo_html(
+                480, p.get("onix", "#182028"), foto_url, photo_focus="50% 26%"
+            )
+            if sp:
+                return (
+                    f'<div style="position:absolute;top:170px;right:170px;'
+                    f'z-index:1">{sp}</div>'
+                )
+        slot = 0  # sem foto -> cai no primeiro pattern
+    fn, css, op = _DECOR_RECIPES[slot]
+    return sc_pattern_layer_html(fn, css, op)
