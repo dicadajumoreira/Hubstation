@@ -54,6 +54,9 @@ _PAGINATION_STYLE = ""
 # aplica quando ha foto de capa (Sindicompany). Vazio = classic.
 _CAPA_STYLE = ""
 
+# Seed do carrossel (id) — usada pra variar a decoracao de pattern por slide.
+_CARROSSEL_SEED = ""
+
 # Identidade da marca atual, vinda da tabela `marcas`. Setadas em
 # gerar_carrossel() a partir do slug. Para as 3 marcas chumbadas
 # (sindicompanybr/bysindicompany/consvictabr) prefixo e handle continuam
@@ -7257,6 +7260,10 @@ def _slide_html(
 
     if is_cta:
         badge_label = _brand_label()
+    elif _BRAND == "sindicompanybr":
+        # Numero do slide fica SO na paginacao (canto). O badge do topo vira
+        # tag de categoria (formato), sem duplicar a numeracao.
+        badge_label = _formato_label(formato)
     else:
         badge_label = f"{slide_idx} / {total}"
 
@@ -7277,23 +7284,14 @@ def _slide_html(
     if _BRAND == "sindicompanybr" and not is_frase:
         if is_cta:
             corner_overlay_div = brand_kit.sc_corner_overlay_html(
-                "cyan", opacity=0.34, position="right top", size="46%"
-            )
-        elif foto_capa_url and slide_idx % 2 == 1:
-            # Acento symbolPhoto: a foto da capa aparece no ponto do simbolo,
-            # no topo-direito. So em slides alternados (impares) pra continuar
-            # especial; os pares mantem o watermark de petala.
-            _sp = brand_kit.sc_symbol_photo_html(
-                500, p["onix"], foto_capa_url, photo_focus="50% 26%"
-            )
-            corner_overlay_div = (
-                f'<div style="position:absolute;top:160px;right:170px;'
-                f'z-index:1">{_sp}</div>'
+                "cyan", opacity=0.20, position="right top", size="44%"
             )
         else:
-            # Watermark de canto VISIVEL (spec do brandbook: min ~40%).
-            corner_overlay_div = brand_kit.sc_corner_overlay_html(
-                "navy", opacity=0.40, position="right top", size="46%"
+            # Decoracao rotativa: cada slide ganha uma forma/posicao de
+            # pattern diferente (ou o acento symbolPhoto), em opacidade baixa.
+            # Variedade entre slides e entre carrosseis.
+            corner_overlay_div = brand_kit.sc_slide_decor_html(
+                _CARROSSEL_SEED, slide_idx, p, foto_capa_url
             )
 
     # Brand Kit: receita de fundo. bg_color (hex) segue servindo o calculo
@@ -8307,6 +8305,7 @@ def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
     global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE, _BRAND_PREFIX, _BRAND_HANDLE
     global _BRAND_TIPOGRAFIA, _BRAND_NAME, _PAGINATION_STYLE, _CAPA_STYLE
+    global _CARROSSEL_SEED
     global _SC_NAVY, _SC_CYAN, _SC_BEIGE, _SC_LAVENDER, _SC_PURPLE, _SC_PAPER, _SC_PAPER_WARM
     print(f"[carrossel] iniciando geração de {carrossel_id}", flush=True)
     try:
@@ -8386,6 +8385,7 @@ def gerar_carrossel(carrossel_id: str) -> int:
         _PAGINATION_STYLE = brand_kit.pick_pagination_style(carrossel_id)
         # Estilo de capa (classic/house) tambem varia por carrossel.
         _CAPA_STYLE = brand_kit.pick_capa_style(carrossel_id)
+        _CARROSSEL_SEED = str(carrossel_id)
         print(
             f"[carrossel] pagination={_PAGINATION_STYLE} capa={_CAPA_STYLE}",
             flush=True,
