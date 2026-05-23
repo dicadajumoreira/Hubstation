@@ -31,6 +31,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from api import brand_kit
 from api.supabase_client import _client as _sb_client
 from api.text_gen import _client as _openai_client, MODEL, _gerar_json
 
@@ -44,6 +45,10 @@ _BRAND = "sindicompanybr"
 # Vazio = usa o fallback da env var SINDICOMPANY_COVER_ARCHETYPE
 # (legado) ou a capa classica se a env nao estiver setada.
 _COVER_ARCHETYPE = ""
+
+# Estilo de paginacao do slide (dots/ticks/bar/index), escolhido UMA vez
+# por carrossel em gerar_carrossel pra variar entre carrosseis. Vazio = dots.
+_PAGINATION_STYLE = ""
 
 # Identidade da marca atual, vinda da tabela `marcas`. Setadas em
 # gerar_carrossel() a partir do slug. Para as 3 marcas chumbadas
@@ -6726,6 +6731,29 @@ COVER_ARCHETYPES_SC = {
 # polaroid-stack, avatar-quote, floating-card, photo-strip, photo-grid.
 
 
+def _slide_pagination(
+    slide_idx: int,
+    total: int,
+    is_frase: bool,
+    accent: str,
+    fg_color: str,
+    font_numeric: str,
+) -> str:
+    """Paginacao do slide (pool por carrossel), pra TODAS as marcas. Cores
+    da marca (accent + texto) e fonte numerica da marca. Frase/respiro nao
+    recebe marcador. Substitui o antigo numero gigante (bignum)."""
+    if is_frase:
+        return ""
+    return brand_kit.sc_pagination_html(
+        _PAGINATION_STYLE or "dots",
+        slide_idx,
+        total,
+        accent,
+        fg_color,
+        font=font_numeric,
+    )
+
+
 def _slide_html(
     *,
     slide_idx: int,
@@ -6779,25 +6807,51 @@ def _slide_html(
     # @bysindicompany usa LOGO 1 do bucket __by-logos no topo;
     # @consvictabr usa LOGO 1 do bucket __consvicta-logos; @sindicompanybr
     # usa o slot 5 do bucket __logos (logo principal Sindicompany).
-    if _BRAND == "bysindicompany":
-        logo_top_slot = 1
-    elif _BRAND == "consvictabr":
-        logo_top_slot = 1
+    if _BRAND == "sindicompanybr":
+        # Logo recolorivel (Brand Kit): simbolo por mascara + wordmark
+        # Provicali, colorido pelo fundo do slide (capa/CTA escuros ->
+        # branco; conteudo claro -> navy). Substitui o PNG de slot fixo.
+        _bg_dark = (
+            is_capa
+            or (tipo or "").strip().lower() == "cta"
+            or slide_idx == total
+        )
+        _hc, _dc, _wc = brand_kit.pick_logo_colors(_bg_dark, _palette())
+        logo_top_img = brand_kit.sc_logo_horizontal_html(
+            720, _hc, _dc, _wc, klass="logo-top"
+        )
+        if not logo_top_img:  # mascara ausente -> fallback pro slot legado
+            _u = _logo_slot_data_url(5)
+            logo_top_img = (
+                f'<img class="logo-top" src="{_u}" alt="" />' if _u else ""
+            )
     else:
-        logo_top_slot = 5
-    logo_top_url = _logo_slot_data_url(logo_top_slot)
-    logo_top_img = (
-        f'<img class="logo-top" src="{logo_top_url}" alt="" />'
-        if logo_top_url
-        else ""
-    )
+        if _BRAND == "bysindicompany":
+            logo_top_slot = 1
+        elif _BRAND == "consvictabr":
+            logo_top_slot = 1
+        else:
+            logo_top_slot = 5
+        logo_top_url = _logo_slot_data_url(logo_top_slot)
+        logo_top_img = (
+            f'<img class="logo-top" src="{logo_top_url}" alt="" />'
+            if logo_top_url
+            else ""
+        )
 
     if is_capa:
-        # Slide 1: foto na metade de cima + texto sobre overlay escuro embaixo
+        # Slide 1: foto na metade de cima + texto sobre overlay escuro embaixo.
+        # Sem foto: Sindicompany usa o gradiente Deep Sea (navy->purple);
+        # demais marcas mantem o fallback mint->onix.
+        _capa_grad = (
+            brand_kit.gradient_css("deep_sea")
+            if _BRAND == "sindicompanybr"
+            else f'linear-gradient(135deg, {p["mint"]} 0%, {p["onix"]} 100%)'
+        )
         bg = (
             f'<div class="hero-img" style="background-image: url(\'{foto_capa_url}\')"></div>'
             if foto_capa_url
-            else f'<div class="hero-img" style="background: linear-gradient(135deg, {p["mint"]} 0%, {p["onix"]} 100%);"></div>'
+            else f'<div class="hero-img" style="background: {_capa_grad};"></div>'
         )
         body_html = (
             f'<p class="capa-body">{_h_with_data(body, is_consvicta)}</p>'
@@ -7151,6 +7205,36 @@ def _slide_html(
         else ""
     )
 
+    # Brand Kit: watermark de canto (petalas) discreto no topo-direito.
+    # So Sindicompany (Consvicta tem ambient proprio). CTA escuro usa canto
+    # cyan mais visivel; conteudo claro usa navy bem sutil.
+    corner_overlay_div = ""
+    if _BRAND == "sindicompanybr" and not is_frase:
+        if is_cta:
+            corner_overlay_div = brand_kit.sc_corner_overlay_html(
+                "cyan", opacity=0.16, position="right top", size="38%"
+            )
+        else:
+            corner_overlay_div = brand_kit.sc_corner_overlay_html(
+                "navy", opacity=0.08, position="right top", size="36%"
+            )
+
+    # Brand Kit: receita de fundo. bg_color (hex) segue servindo o calculo
+    # de contraste; bg_css e o que pinta de fato. Sindicompany: CTA usa
+    # gradiente Deep Sea, respiro usa Sunset, conteudo mantem a cor base +
+    # glow radial sutil pra profundidade. Demais marcas: solido (legado).
+    bg_css = bg_color
+    glow_div = ""
+    if _BRAND == "sindicompanybr":
+        if is_cta:
+            bg_css = brand_kit.gradient_css("deep_sea")
+        elif is_frase:
+            bg_css = brand_kit.gradient_css("sunset")
+        else:
+            glow_div = brand_kit.sc_glow_overlay_html(
+                p["mint"], p["lavender"], op1=0.30, op2=0.26
+            )
+
     # Pattern de fundo:
     # - Slides internos: pattern ciclando, tile 800x800, 10% opacity
     # - CTA (ultimo): Consvicta usa picker dark; outras marcas fixam
@@ -7255,7 +7339,7 @@ def _slide_html(
   html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
   body {{
     font-family: {font_body};
-    background: {bg_color};
+    background: {bg_css};
     color: {fg_color};
     overflow: hidden;
     position: relative;
@@ -7511,13 +7595,15 @@ def _slide_html(
   }}
 </style></head>
 <body>
+  {glow_div}
   {pattern_div}
+  {corner_overlay_div}
   {('<div class="ambient-grid"></div><div class="ambient-orb ambient-orb-gold"></div><div class="ambient-orb ambient-orb-tiff"></div>') if is_consvicta else ''}
   {watermark_div_internal}
   {slide_foto_div}
   {icon_bg_div}
   <div class="frame-corner"></div>
-  {('' if (is_consvicta or is_frase) else f'<div class="bignum">{slide_idx:02d}</div>')}
+  {_slide_pagination(slide_idx, total, is_frase, accent, fg_color, font_numeric)}
   <div class="content">
     {('' if is_frase else f'<span class="badge">{_h(badge_label)}</span>')}
     {('' if is_frase else '<div class="accent-line"></div>')}
@@ -8139,7 +8225,7 @@ def _ensure_cta(
 def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
     global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE, _BRAND_PREFIX, _BRAND_HANDLE
-    global _BRAND_TIPOGRAFIA, _BRAND_NAME
+    global _BRAND_TIPOGRAFIA, _BRAND_NAME, _PAGINATION_STYLE
     global _SC_NAVY, _SC_CYAN, _SC_BEIGE, _SC_LAVENDER, _SC_PURPLE, _SC_PAPER, _SC_PAPER_WARM
     print(f"[carrossel] iniciando geração de {carrossel_id}", flush=True)
     try:
@@ -8213,6 +8299,11 @@ def gerar_carrossel(carrossel_id: str) -> int:
                 f" (source={'db' if ca_db else 'env'})",
                 flush=True,
             )
+
+        # Paginacao: estilo escolhido por carrossel (deterministico pelo id)
+        # pra variar entre carrosseis sem mudar dentro do mesmo.
+        _PAGINATION_STYLE = brand_kit.pick_pagination_style(carrossel_id)
+        print(f"[carrossel] pagination={_PAGINATION_STYLE}", flush=True)
 
         _update_carrossel(carrossel_id, {"status": "em_producao", "erro_mensagem": None})
 
