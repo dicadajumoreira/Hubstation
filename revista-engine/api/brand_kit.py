@@ -316,12 +316,14 @@ def sc_pagination_html(
         )
     if style == "index":
         return (
-            f'<div style="position:absolute;right:180px;bottom:170px;'
-            f'text-align:right;z-index:3;font-family:{font}">'
-            f'<div style="font-size:180px;font-weight:800;color:{fg};'
-            f'line-height:0.8;letter-spacing:-0.04em">{idx:02d}</div>'
-            f'<div style="font-size:64px;font-weight:600;color:{accent};'
-            f'margin-top:8px">/ {total:02d}</div></div>'
+            f'<div style="position:absolute;left:50%;bottom:130px;'
+            f'transform:translateX(-50%);text-align:center;z-index:3;'
+            f'font-family:{font};display:inline-flex;align-items:baseline;'
+            f'gap:14px">'
+            f'<span style="font-size:120px;font-weight:800;color:{fg};'
+            f'line-height:0.8;letter-spacing:-0.04em">{idx:02d}</span>'
+            f'<span style="font-size:54px;font-weight:600;color:{accent}">'
+            f'/ {total:02d}</span></div>'
         )
     if style == "ticks":
         bars = "".join(
@@ -331,7 +333,8 @@ def sc_pagination_html(
             for i in range(total)
         )
         return (
-            f'<div style="position:absolute;right:180px;bottom:250px;z-index:3;'
+            f'<div style="position:absolute;left:50%;bottom:140px;'
+            f'transform:translateX(-50%);z-index:3;'
             f'display:flex;gap:20px;align-items:flex-end">{bars}</div>'
         )
     # default: dots
@@ -341,7 +344,8 @@ def sc_pagination_html(
         for i in range(total)
     )
     return (
-        f'<div style="position:absolute;right:180px;bottom:250px;z-index:3;'
+        f'<div style="position:absolute;left:50%;bottom:150px;'
+        f'transform:translateX(-50%);z-index:3;'
         f'display:flex;gap:28px;align-items:center">{dots}</div>'
     )
 

@@ -7260,6 +7260,10 @@ def _slide_html(
 
     if is_cta:
         badge_label = _brand_label()
+    elif _BRAND == "sindicompanybr":
+        # Numero do slide fica SO na paginacao (canto). O badge do topo vira
+        # tag de categoria (formato), sem duplicar a numeracao.
+        badge_label = _formato_label(formato)
     else:
         badge_label = f"{slide_idx} / {total}"
 
