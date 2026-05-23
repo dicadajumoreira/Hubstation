@@ -50,6 +50,10 @@ _COVER_ARCHETYPE = ""
 # por carrossel em gerar_carrossel pra variar entre carrosseis. Vazio = dots.
 _PAGINATION_STYLE = ""
 
+# Estilo de capa (classic/house), escolhido por carrossel. "house" so
+# aplica quando ha foto de capa (Sindicompany). Vazio = classic.
+_CAPA_STYLE = ""
+
 # Identidade da marca atual, vinda da tabela `marcas`. Setadas em
 # gerar_carrossel() a partir do slug. Para as 3 marcas chumbadas
 # (sindicompanybr/bysindicompany/consvictabr) prefixo e handle continuam
@@ -6909,6 +6913,59 @@ def _slide_html(
                 font_body=font_body,
                 foto_capa_url=foto_capa_url,
             )
+
+        # Capa editorial (Brand Kit): a foto entra na silhueta da casa
+        # (symbolWindow). So Sindicompany, quando o carrossel sorteou o
+        # estilo "house" E ha foto de capa. Fundo Deep Sea.
+        if (
+            _BRAND == "sindicompanybr"
+            and _CAPA_STYLE == "house"
+            and foto_capa_url
+        ):
+            _hero = brand_kit.sc_symbol_window_html(
+                1500, foto_capa_url, p["mint"], photo_focus="50% 28%"
+            )
+            if _hero:
+                _deep = brand_kit.gradient_css("deep_sea")
+                _badge = _h(_formato_label(formato))
+                return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{ font-family: {font_body}; background: {_deep};
+    color: {p["white"]}; overflow: hidden; position: relative; }}
+  .logo-top {{ position: absolute; top: 100px; left: 180px; z-index: 5; }}
+  .hero-window {{ position: absolute; top: 380px; left: 0; right: 0;
+    display: flex; justify-content: center; }}
+  .content {{ position: absolute; left: 180px; right: 180px; bottom: 430px;
+    z-index: 4; }}
+  .badge {{ display: inline-block; border: 3px solid rgba(255,255,255,0.4);
+    color: {p["white"]}; font-family: {font_body}; font-weight: 700;
+    font-size: 60px; letter-spacing: 0.18em; padding: 18px 34px;
+    border-radius: 10px; text-transform: uppercase; }}
+  .capa-titulo {{ font-family: {font_display}; font-weight: 800;
+    font-size: 232px; line-height: 0.95; letter-spacing: -0.02em;
+    color: {p["white"]}; margin-top: 44px; text-wrap: balance;
+    max-width: 17ch; }}
+  .hook-hl {{ color: {p["lavender"]}; background-image: linear-gradient(
+    transparent 62%, {p["lavender"]}33 62%); background-repeat: no-repeat; }}
+  .handle {{ position: absolute; bottom: 120px; left: 180px;
+    font-family: {font_body}; font-size: 77px; font-weight: 600;
+    color: {p["white"]}; opacity: 0.85; letter-spacing: 0.08em; }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="hero-window">{_hero}</div>
+  <div class="content">
+    <span class="badge">{_badge}</span>
+    <h1 class="capa-titulo">{_h_hook(titulo, is_consvicta)}</h1>
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
         # Cor do titulo da capa: cromatica da marca, legivel no painel
         # escuro (onix) onde o texto da capa fica. Corpo segue em sand.
         capa_titulo_color = _pick_title_color(p["onix"], p["white"], p)
@@ -8237,7 +8294,7 @@ def _ensure_cta(
 def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
     global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE, _BRAND_PREFIX, _BRAND_HANDLE
-    global _BRAND_TIPOGRAFIA, _BRAND_NAME, _PAGINATION_STYLE
+    global _BRAND_TIPOGRAFIA, _BRAND_NAME, _PAGINATION_STYLE, _CAPA_STYLE
     global _SC_NAVY, _SC_CYAN, _SC_BEIGE, _SC_LAVENDER, _SC_PURPLE, _SC_PAPER, _SC_PAPER_WARM
     print(f"[carrossel] iniciando geração de {carrossel_id}", flush=True)
     try:
@@ -8315,7 +8372,12 @@ def gerar_carrossel(carrossel_id: str) -> int:
         # Paginacao: estilo escolhido por carrossel (deterministico pelo id)
         # pra variar entre carrosseis sem mudar dentro do mesmo.
         _PAGINATION_STYLE = brand_kit.pick_pagination_style(carrossel_id)
-        print(f"[carrossel] pagination={_PAGINATION_STYLE}", flush=True)
+        # Estilo de capa (classic/house) tambem varia por carrossel.
+        _CAPA_STYLE = brand_kit.pick_capa_style(carrossel_id)
+        print(
+            f"[carrossel] pagination={_PAGINATION_STYLE} capa={_CAPA_STYLE}",
+            flush=True,
+        )
 
         _update_carrossel(carrossel_id, {"status": "em_producao", "erro_mensagem": None})
 

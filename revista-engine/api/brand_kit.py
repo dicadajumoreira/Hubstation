@@ -277,6 +277,22 @@ def pick_pagination_style(seed: str) -> str:
     return PAGINATION_POOL[h % len(PAGINATION_POOL)]
 
 
+# Estilo de capa (varia por carrossel quando ha foto de capa):
+#   classic = foto full-bleed (metade de cima) + texto embaixo
+#   house   = foto dentro da silhueta da casa (symbolWindow), editorial
+# Pool com peso: classic mais frequente; house entra ~1/3 das vezes.
+CAPA_POOL = ["classic", "classic", "house"]
+
+
+def pick_capa_style(seed: str) -> str:
+    """Escolhe o estilo de capa pelo seed. Some seed diferente da paginacao
+    pra nao correlacionar os dois (offset)."""
+    if not seed:
+        return CAPA_POOL[0]
+    h = sum(ord(c) for c in str(seed)) + 7  # offset != paginacao
+    return CAPA_POOL[h % len(CAPA_POOL)]
+
+
 def sc_pagination_html(
     style: str,
     idx: int,
