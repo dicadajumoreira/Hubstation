@@ -36,10 +36,9 @@ export function UploadLibraryButtonSindicompany() {
             Subir biblioteca embutida pros slots
           </h3>
           <p className="text-xs text-g60 sm:max-w-2xl">
-            Em 1 clique sobe os PNGs embutidos do Brand Hub novo
-            (Sindicompany horizontal + 3 masks do símbolo paramétrico)
-            pros slots Supabase abaixo. Idempotente — pode rodar várias
-            vezes, vai apenas substituir.
+            Em 1 clique sobe os 33 assets embutidos do Brand Hub (10 logos,
+            6 ícones, 17 patterns) pros slots Supabase abaixo. Idempotente —
+            pode rodar várias vezes, vai apenas substituir.
           </p>
         </div>
         {!confirming ? (

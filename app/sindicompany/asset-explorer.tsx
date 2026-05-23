@@ -14,6 +14,7 @@ import {
 } from "@/lib/sindicompany/asset-hierarchy";
 import { getMarca } from "@/lib/sindicompany/marcas-db";
 import { AssetSlotGrid } from "./asset-slot-grid";
+import { ZipUploadButton } from "./zip-upload-button";
 import { DashboardShell } from "./shell";
 import { UploadLibraryButton } from "./consvicta-assets/upload-library-button";
 import { UploadLibraryButtonSindicompany } from "./assets/upload-library-button";
@@ -425,6 +426,11 @@ async function LeafView({
             )}
           </p>
         </header>
+
+        <ZipUploadButton
+          startSlot={urls.reduce((m, u, i) => (u ? i + 1 : m), 0) + 1}
+          uploadIntent={leafUploadIntent}
+        />
 
         <AssetSlotGrid
           storageKey={storageKey}
