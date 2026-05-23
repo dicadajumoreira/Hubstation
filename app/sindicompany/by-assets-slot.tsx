@@ -122,17 +122,29 @@ export function ByAssetSlot({
           </span>
         )}
       </div>
-      <input
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/svg+xml"
-        disabled={status === "uploading"}
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void handleFile(f);
-        }}
-        className="block w-full text-xs text-onix-800 file:mr-2 file:rounded file:border file:border-onix-100 file:bg-onix-50 file:px-2 file:py-1 file:text-xs file:font-medium hover:file:bg-onix-100"
-      />
-      {status === "uploading" && <p className="text-[10px] text-g60">Enviando…</p>}
+      <label
+        className={`block w-full cursor-pointer rounded-md text-center text-xs font-semibold py-2.5 transition ${
+          status === "uploading"
+            ? "bg-onix-200 text-onix-500 cursor-wait"
+            : "bg-onix-900 text-white hover:bg-onix-800"
+        }`}
+      >
+        {status === "uploading"
+          ? "Enviando…"
+          : url
+            ? "Trocar arquivo"
+            : "Carregar arquivo"}
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg,.png,.jpg,.jpeg,.webp"
+          disabled={status === "uploading"}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleFile(f);
+          }}
+          className="hidden"
+        />
+      </label>
       {status === "error" && <p className="text-[10px] text-red-700">{errorMsg}</p>}
     </div>
   );
