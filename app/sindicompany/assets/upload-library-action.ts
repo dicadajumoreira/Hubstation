@@ -132,17 +132,22 @@ export async function uploadEmbeddedSindicompanyAssets(): Promise<UploadResult> 
 
   // Logos + masks (__logos/logo-N), icones (__icons/icon-N) e patterns
   // (__patterns/pattern-N). svg+png — content-type derivado da ext.
+  // PARALELO (Promise.all): 33 arquivos em sequencia estouravam o timeout
+  // da function no Netlify (o botao "travava" no celular). Em paralelo
+  // termina rapido.
   const ctype = (ext: string) =>
     ext === "svg" ? "image/svg+xml" : `image/${ext}`;
+  const jobs: Promise<void>[] = [];
   for (const { slot, src, ext } of LOGO_MAP) {
-    await upload(src, `__logos/logo-${slot}.${ext}`, ctype(ext));
+    jobs.push(upload(src, `__logos/logo-${slot}.${ext}`, ctype(ext)));
   }
   for (const { slot, src, ext } of ICON_MAP) {
-    await upload(src, `__icons/icon-${slot}.${ext}`, ctype(ext));
+    jobs.push(upload(src, `__icons/icon-${slot}.${ext}`, ctype(ext)));
   }
   for (const { slot, src, ext } of PATTERN_MAP) {
-    await upload(src, `__patterns/pattern-${slot}.${ext}`, ctype(ext));
+    jobs.push(upload(src, `__patterns/pattern-${slot}.${ext}`, ctype(ext)));
   }
+  await Promise.all(jobs);
 
   // Sanity check: confirma que cada arquivo do manifest esta mapeado.
   const checks: Array<[readonly string[], typeof LOGO_MAP, string]> = [
