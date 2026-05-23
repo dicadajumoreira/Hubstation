@@ -7313,6 +7313,21 @@ def _slide_html(
                 p["mint"], p["lavender"], op1=0.30, op2=0.26
             )
 
+    # Estilo do botao da acao do CTA (.cta-acao). Sindicompany varia o estilo
+    # por carrossel (pill/square/aurora/sunset); demais usam o highlight
+    # accent legado.
+    if _BRAND == "sindicompanybr" and is_cta:
+        cta_acao_decl = brand_kit.cta_acao_css(
+            brand_kit.pick_cta_style(_CARROSSEL_SEED), p
+        )
+    else:
+        cta_acao_decl = (
+            f"background:{accent};color:{accent_text};"
+            f"font-weight:{600 if is_consvicta else 800};"
+            "padding:0.12em 0.34em;border-radius:14px;"
+            "-webkit-box-decoration-break:clone;box-decoration-break:clone;"
+        )
+
     # Pattern de fundo:
     # - Slides internos: pattern ciclando, tile 800x800, 10% opacity
     # - CTA (ultimo): Consvicta usa picker dark; outras marcas fixam
@@ -7546,15 +7561,7 @@ def _slide_html(
   }}
   /* CTA: acao marcada vira BOTAO/caixa (cor da marca + texto contrastante
      + seta leve) — parece acionavel, nunca escondido. */
-  .cta-acao {{
-    background: {accent};
-    color: {accent_text};
-    font-weight: {600 if is_consvicta else 800};
-    padding: 0.12em 0.34em;
-    border-radius: 14px;
-    -webkit-box-decoration-break: clone;
-    box-decoration-break: clone;
-  }}
+  .cta-acao {{ {cta_acao_decl} }}
   .cta-acao::after {{ content: " \\2192"; }}
   /* Para palavras destacadas dentro do body — 55-70 display
      (mid 62 -> 176 css). Use <span class="destaque">…</span>. */

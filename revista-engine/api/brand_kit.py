@@ -562,3 +562,51 @@ def sc_slide_decor_html(
     shape_def = next(s for s in _DECOR_SHAPES if s[0] == slot)
     _, tmpl, css, op = shape_def
     return sc_pattern_layer_html(tmpl.format(c=color), css, op * scale)
+
+
+# ---------------------------------------------------------------------------
+# Estilos de botao do CTA (subset do kit que funciona no fundo escuro)
+# ---------------------------------------------------------------------------
+# Aplicados ao destaque da acao (.cta-acao). O CTA tem fundo Deep Sea
+# (escuro), entao so estilos claros (cyan/beige/lavender/gradiente).
+
+CTA_STYLES = ["pill_cyan", "pill_beige", "pill_lavender", "square_cyan",
+              "aurora", "sunset"]
+
+
+def pick_cta_style(seed: str) -> str:
+    if not seed:
+        return CTA_STYLES[0]
+    h = sum(ord(c) for c in str(seed)) + 11  # offset proprio
+    return CTA_STYLES[h % len(CTA_STYLES)]
+
+
+def cta_acao_css(style: str, p: dict) -> str:
+    """Declaracoes CSS pro destaque da acao do CTA, no estilo dado."""
+    navy = p.get("onix", "#182028")
+    cyan = p.get("mint", "#88C8D0")
+    beige = p.get("sand", "#E0B098")
+    lav = p.get("lavender", "#BFC0FF")
+    pill = "border-radius:999px;"
+    base = (
+        "font-weight:800;padding:0.16em 0.52em;"
+        "-webkit-box-decoration-break:clone;box-decoration-break:clone;"
+    )
+    styles = {
+        "pill_cyan": f"background:{cyan};color:{navy};{pill}{base}",
+        "pill_beige": f"background:{beige};color:{navy};{pill}{base}",
+        "pill_lavender": f"background:{lav};color:{navy};{pill}{base}",
+        "square_cyan": (
+            f"background:{cyan};color:{navy};{base}"
+            "text-transform:uppercase;letter-spacing:0.04em;"
+        ),
+        "aurora": (
+            f"background:linear-gradient(135deg,{lav} 0%,{cyan} 100%);"
+            f"color:{navy};{pill}{base}"
+        ),
+        "sunset": (
+            f"background:linear-gradient(135deg,{beige} 0%,{lav} 100%);"
+            f"color:{navy};{pill}{base}"
+        ),
+    }
+    return styles.get(style, styles["pill_cyan"])
