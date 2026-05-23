@@ -7277,7 +7277,7 @@ def _slide_html(
     if _BRAND == "sindicompanybr" and not is_frase:
         if is_cta:
             corner_overlay_div = brand_kit.sc_corner_overlay_html(
-                "cyan", opacity=0.16, position="right top", size="38%"
+                "cyan", opacity=0.34, position="right top", size="46%"
             )
         elif foto_capa_url and slide_idx % 2 == 1:
             # Acento symbolPhoto: a foto da capa aparece no ponto do simbolo,
@@ -7291,8 +7291,9 @@ def _slide_html(
                 f'z-index:1">{_sp}</div>'
             )
         else:
+            # Watermark de canto VISIVEL (spec do brandbook: min ~40%).
             corner_overlay_div = brand_kit.sc_corner_overlay_html(
-                "navy", opacity=0.08, position="right top", size="36%"
+                "navy", opacity=0.40, position="right top", size="46%"
             )
 
     # Brand Kit: receita de fundo. bg_color (hex) segue servindo o calculo
