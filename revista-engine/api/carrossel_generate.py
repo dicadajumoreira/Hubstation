@@ -7379,7 +7379,12 @@ def _slide_html(
     # visualmente — _icon_for_slide tem fallback pro logo simbolo.
     # Picker curado por tom do slide (light/dark). Outras marcas:
     # CTA segue sem fundo (legado).
-    if is_consvicta:
+    # Sindicompany: NAO usa o Fundo Carrossel legado — o Brand Kit ja tem
+    # glow + decoracao de pattern propria (senao o pattern antigo do bucket
+    # reaparece no fundo).
+    if _BRAND == "sindicompanybr":
+        icon_url_internal = ""
+    elif is_consvicta:
         icon_url_internal = _icon_for_slide(
             slide_idx, is_cta=is_cta, is_capa=False
         )

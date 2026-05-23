@@ -75,3 +75,45 @@ export async function createLeafUploadIntent(
     };
   }
 }
+
+/** Exclui um asset do bucket a partir da sua URL publica. Deriva o path
+ *  do objeto, valida e remove via service role. Usado pelos slots da
+ *  galeria de assets pra apagar arquivos (inclui SVG). */
+export async function deleteLeafAsset(
+  publicUrl: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE)?.value;
+  if (!verifySessionToken(token)) {
+    return { ok: false, error: "Sessao expirada. Faca login de novo." };
+  }
+  if (typeof publicUrl !== "string" || !publicUrl) {
+    return { ok: false, error: "URL invalida." };
+  }
+  const marker = `/object/public/${BUCKET}/`;
+  const i = publicUrl.indexOf(marker);
+  if (i < 0) {
+    return { ok: false, error: "URL fora do bucket de assets." };
+  }
+  let path = publicUrl.slice(i + marker.length).split("?")[0];
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    return { ok: false, error: "Path invalido." };
+  }
+  // Sanitiza: so chars de path seguros (evita traversal).
+  if (!path || path.includes("..") || !/^[a-zA-Z0-9_/.-]+$/.test(path)) {
+    return { ok: false, error: "Path invalido." };
+  }
+  try {
+    const supabase = createAdminClient();
+    const { error } = await supabase.storage.from(BUCKET).remove([path]);
+    if (error) throw error;
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Falha ao excluir.",
+    };
+  }
+}
