@@ -345,8 +345,61 @@ function ensureHooks(slides: CarrosselSlide[]): CarrosselSlide[] {
   return slides;
 }
 
-// Esqueleto emocional por quantidade de slides (estrutura ideal). O modelo
-// segue este arco e encaixa o FORMATO/tema dentro. RESPIRO = slide tipo
+// Ajuste deterministico pra contagem EXATA de slides. Trunca se passar
+// (mantendo capa + CTA); se faltar, divide o slide de maior corpo numa
+// fronteira de frase (ou palavra) ate atingir n. Garante a contagem.
+function fitToExact(slides: CarrosselSlide[], n: number): CarrosselSlide[] {
+  let out = slides.map((s) => ({ ...s }));
+  if (out.length > n) {
+    // mantem o primeiro (capa) e o ultimo (CTA); corta do meio
+    out = [...out.slice(0, n - 1), out[out.length - 1]];
+  }
+  let guard = 0;
+  while (out.length < n && guard++ < 80) {
+    // escolhe o slide de conteudo (nao capa/cta) com o maior corpo
+    let idx = -1;
+    let best = 0;
+    const lo = out.length > 2 ? 1 : 0;
+    const hi = out.length > 2 ? out.length - 1 : out.length;
+    for (let i = lo; i < hi; i++) {
+      const len = String(out[i].body ?? "").length;
+      if (len > best) {
+        best = len;
+        idx = i;
+      }
+    }
+    if (idx < 0) break;
+    const s = out[idx];
+    const body = String(s.body ?? "");
+    let parts = body.split(/(?<=[.!?…])\s+/).filter((p) => p.trim());
+    if (parts.length < 2) parts = body.split(/\s+/).filter(Boolean);
+    if (parts.length < 2) break; // impossivel dividir
+    const mid = Math.ceil(parts.length / 2);
+    const sep = /[.!?…]/.test(body) ? " " : " ";
+    out.splice(
+      idx,
+      1,
+      { ...s, body: parts.slice(0, mid).join(sep).trim() },
+      { tipo: s.tipo || "conteudo", titulo: "", body: parts.slice(mid).join(sep).trim() },
+    );
+  }
+  return out.slice(0, n);
+}
+
+// Prompt focado pra reescrever uma copy curta com a contagem EXATA pedida.
+function buildFixPrompt(slides: CarrosselSlide[], n: number): string {
+  return (
+    `Esta copy de carrossel tem ${slides.length} slides, mas precisa ter EXATAMENTE ${n}.\n` +
+    `Reescreva mantendo o MESMO tema, voz, formato e o destaque [[...]], expandindo o ` +
+    `conteudo de forma natural (sem repetir, sem encher linguica) para ${n} slides. ` +
+    `Mantenha o slide 1 como capa e o ultimo como CTA.\n` +
+    `Estrutura sugerida: ${ESTRUTURA_POR_SLIDES[n] ?? ""}\n` +
+    `Slides atuais:\n${JSON.stringify(slides)}\n\n` +
+    `Responda SO com JSON valido: { "slides": [ ... exatamente ${n} slides {tipo,titulo,body} ... ] }`
+  );
+}
+
+
 // "frase" (limpo, centralizado). Último slide = sempre CTA.
 const ESTRUTURA_POR_SLIDES: Record<number, string> = {
   5: '1 Hook · 2 Amplificação da dor/conflito · 3 Virada/verdade incômoda · 4 Solução/posicionamento · 5 Frase memorável + CTA',
@@ -528,7 +581,38 @@ export async function gerarTresCopies(input: {
     // engine, aplicada aqui pro preview tambem mostrar o realce.
     return { slides: ensureHooks(slides), legenda: o.legenda ?? "" };
   });
-  return { ok: true, copies: normalized };
+
+  // Contagem EXATA de slides. O modelo as vezes devolve menos que o pedido
+  // (sobretudo >6). 1) reescreve copies curtas via modelo; 2) ajuste
+  // deterministico (fitToExact) garante exatamente n_slides em todas.
+  const nonEmpty = (s: CarrosselSlide) =>
+    !!s && (String(s.titulo ?? "").trim() !== "" || String(s.body ?? "").trim() !== "");
+  const copies = await Promise.all(
+    normalized.map(async (c) => {
+      let slides = c.slides;
+      if (slides.length < input.n_slides) {
+        const r = await chat(buildFixPrompt(slides, input.n_slides), systemPrompt);
+        if (r.ok) {
+          try {
+            const p = JSON.parse(r.content) as Partial<CarrosselCopy>;
+            if (Array.isArray(p.slides)) {
+              const fixed = (p.slides as CarrosselSlide[])
+                .filter(nonEmpty)
+                .slice(0, input.n_slides);
+              if (fixed.length > slides.length) slides = fixed;
+            }
+          } catch {
+            /* mantem o que tinha; o fitToExact garante a contagem */
+          }
+        }
+      }
+      return {
+        slides: ensureHooks(fitToExact(slides, input.n_slides)),
+        legenda: c.legenda,
+      };
+    }),
+  );
+  return { ok: true, copies };
 }
 
 /** Traduz fielmente a descricao livre que a editora escreveu na
