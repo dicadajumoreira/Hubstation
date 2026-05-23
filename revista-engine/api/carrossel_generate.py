@@ -6981,6 +6981,14 @@ def _slide_html(
         # cor da marca (comportamento anterior).
         capa_has_hook = "[[" in (titulo or "")
         capa_titulo_base = p["white"] if capa_has_hook else capa_titulo_color
+        # Divisor (linha decorativa) varia o estilo por carrossel.
+        capa_div_decl = (
+            brand_kit.divider_css(
+                brand_kit.pick_line_style(_CARROSSEL_SEED), p["mint"]
+            )
+            if _BRAND == "sindicompanybr"
+            else f'background:{p["mint"]};height:6px;border-radius:3px;'
+        )
         return f"""
 <!doctype html><html><head><meta charset="utf-8">
 {head_fonts}
@@ -7092,11 +7100,8 @@ def _slide_html(
     margin-bottom: 50px;
   }}
   .accent-line {{
-    /* Barra fina mint sob o badge — assinatura editorial. */
-    width: 180px; height: 6px;
-    background: {p["mint"]};
-    margin-bottom: 50px;
-    border-radius: 3px;
+    /* Divisor sob o badge — estilo varia por carrossel. */
+    width: 180px; margin-bottom: 50px; {capa_div_decl}
   }}
   .capa-titulo {{
     font-family: {font_display};
@@ -7273,6 +7278,12 @@ def _slide_html(
     # Cor do titulo distinta do corpo (fg_color) -> hierarquia cromatica.
     # Puxada da paleta da marca por contraste; cai em fg se nada servir.
     titulo_color = _pick_title_color(bg_color, fg_color, p)
+    # Divisor (linha decorativa) varia o estilo por carrossel.
+    content_div_decl = (
+        brand_kit.divider_css(brand_kit.pick_line_style(_CARROSSEL_SEED), accent)
+        if _BRAND == "sindicompanybr"
+        else f"background:{accent};height:6px;border-radius:3px;"
+    )
 
     body_html = (
         f'<p class="slide-body">{_h_hook(body, is_consvicta, "cta-acao" if is_cta else "body-hl")}</p>'
@@ -7520,11 +7531,8 @@ def _slide_html(
     box-shadow: 0 12px 40px rgba(0,0,0,0.12);
   }}
   .accent-line {{
-    /* Barra fina abaixo do badge — assinatura editorial. */
-    width: 180px; height: 6px;
-    background: {accent};
-    margin-bottom: 50px;
-    border-radius: 3px;
+    /* Divisor sob o badge — estilo varia por carrossel. */
+    width: 180px; margin-bottom: 50px; {content_div_decl}
   }}
   .slide-titulo {{
     font-family: {font_display};
