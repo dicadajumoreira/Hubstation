@@ -306,17 +306,30 @@ def sc_pagination_html(
     ativo, `fg` (texto) esmaecido na trilha. `font` = fonte numerica da
     marca (estilo 'index'). idx 1-based."""
     track = f"{fg}33"  # ~20% alpha do texto da marca
+    # Numero do slide — SEMPRE visivel (centralizado). Os indicadores
+    # visuais (dots/ticks/bar) acompanham conforme o estilo.
+    num = (
+        f'<span style="font-family:{font};font-weight:700;font-size:46px;'
+        f'color:{fg};letter-spacing:0.06em;line-height:1">{idx:02d}'
+        f'<span style="color:{accent};font-weight:600"> / {total:02d}</span>'
+        f"</span>"
+    )
     if style == "bar":
         pct = max(0.0, min(1.0, idx / total)) * 100 if total else 0
-        return (
+        bar = (
             f'<div style="position:absolute;left:0;right:0;bottom:0;height:16px;'
             f'background:{fg}1f;z-index:3">'
             f'<div style="height:100%;width:{pct:.1f}%;background:{accent}"></div>'
             f"</div>"
         )
+        lbl = (
+            f'<div style="position:absolute;left:50%;bottom:54px;'
+            f'transform:translateX(-50%);z-index:3">{num}</div>'
+        )
+        return bar + lbl
     if style == "index":
         return (
-            f'<div style="position:absolute;left:50%;bottom:130px;'
+            f'<div style="position:absolute;left:50%;bottom:120px;'
             f'transform:translateX(-50%);text-align:center;z-index:3;'
             f'font-family:{font};display:inline-flex;align-items:baseline;'
             f'gap:14px">'
@@ -327,26 +340,30 @@ def sc_pagination_html(
         )
     if style == "ticks":
         bars = "".join(
-            f'<span style="width:22px;height:{72 if i == idx - 1 else 38}px;'
+            f'<span style="width:22px;height:{56 if i == idx - 1 else 30}px;'
             f'border-radius:11px;background:{accent if i == idx - 1 else track}">'
             f"</span>"
             for i in range(total)
         )
         return (
-            f'<div style="position:absolute;left:50%;bottom:140px;'
-            f'transform:translateX(-50%);z-index:3;'
-            f'display:flex;gap:20px;align-items:flex-end">{bars}</div>'
+            f'<div style="position:absolute;left:50%;bottom:120px;'
+            f'transform:translateX(-50%);z-index:3;display:flex;'
+            f'flex-direction:column;align-items:center;gap:22px">'
+            f'<div style="display:flex;gap:20px;align-items:flex-end">{bars}</div>'
+            f"{num}</div>"
         )
     # default: dots
     dots = "".join(
-        f'<span style="width:32px;height:32px;border-radius:50%;'
+        f'<span style="width:26px;height:26px;border-radius:50%;'
         f'background:{accent if i == idx - 1 else track}"></span>'
         for i in range(total)
     )
     return (
-        f'<div style="position:absolute;left:50%;bottom:150px;'
-        f'transform:translateX(-50%);z-index:3;'
-        f'display:flex;gap:28px;align-items:center">{dots}</div>'
+        f'<div style="position:absolute;left:50%;bottom:120px;'
+        f'transform:translateX(-50%);z-index:3;display:flex;'
+        f'flex-direction:column;align-items:center;gap:22px">'
+        f'<div style="display:flex;gap:24px;align-items:center">{dots}</div>'
+        f"{num}</div>"
     )
 
 
@@ -451,31 +468,31 @@ _DECOR_RECIPES = [
         "canto-navy.png",
         "top:-60px;right:-60px;width:1240px;height:1240px;"
         "background-position:right top;background-size:contain",
-        0.18,
+        0.12,
     ),
     (
         "criativo-direito-navy.png",
         "top:50%;right:0;transform:translateY(-50%);width:920px;height:1110px;"
         "background-position:right center;background-size:contain",
-        0.15,
+        0.10,
     ),
     (
         "decorativo-navy-2.png",
         "bottom:40px;right:120px;width:780px;height:1000px;"
         "background-position:right bottom;background-size:contain",
-        0.15,
+        0.10,
     ),
     (
         "fundo-geo-navy.png",
         "left:0;right:0;bottom:0;height:720px;"
         "background-position:center bottom;background-size:cover",
-        0.10,
+        0.07,
     ),
     (
         "fundo-circ-navy.png",
         "inset:0;background-position:center;background-size:1500px;"
         "background-repeat:repeat",
-        0.05,
+        0.035,
     ),
 ]
 

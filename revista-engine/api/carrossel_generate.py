@@ -7284,7 +7284,7 @@ def _slide_html(
     if _BRAND == "sindicompanybr" and not is_frase:
         if is_cta:
             corner_overlay_div = brand_kit.sc_corner_overlay_html(
-                "cyan", opacity=0.20, position="right top", size="44%"
+                "cyan", opacity=0.15, position="right top", size="44%"
             )
         else:
             # Decoracao rotativa: cada slide ganha uma forma/posicao de
