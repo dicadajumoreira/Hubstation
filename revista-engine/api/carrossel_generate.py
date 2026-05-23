@@ -57,6 +57,9 @@ _CAPA_STYLE = ""
 # Seed do carrossel (id) — usada pra variar a decoracao de pattern por slide.
 _CARROSSEL_SEED = ""
 
+# Cor do pattern do carrossel (navy/beige/purple) — varia o feed.
+_PATTERN_COLOR = "navy"
+
 # Identidade da marca atual, vinda da tabela `marcas`. Setadas em
 # gerar_carrossel() a partir do slug. Para as 3 marcas chumbadas
 # (sindicompanybr/bysindicompany/consvictabr) prefixo e handle continuam
@@ -7291,7 +7294,7 @@ def _slide_html(
             # pattern diferente (ou o acento symbolPhoto), em opacidade baixa.
             # Variedade entre slides e entre carrosseis.
             corner_overlay_div = brand_kit.sc_slide_decor_html(
-                _CARROSSEL_SEED, slide_idx, p, foto_capa_url
+                _CARROSSEL_SEED, slide_idx, p, foto_capa_url, color=_PATTERN_COLOR
             )
 
     # Brand Kit: receita de fundo. bg_color (hex) segue servindo o calculo
@@ -8305,7 +8308,7 @@ def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
     global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE, _BRAND_PREFIX, _BRAND_HANDLE
     global _BRAND_TIPOGRAFIA, _BRAND_NAME, _PAGINATION_STYLE, _CAPA_STYLE
-    global _CARROSSEL_SEED
+    global _CARROSSEL_SEED, _PATTERN_COLOR
     global _SC_NAVY, _SC_CYAN, _SC_BEIGE, _SC_LAVENDER, _SC_PURPLE, _SC_PAPER, _SC_PAPER_WARM
     print(f"[carrossel] iniciando geração de {carrossel_id}", flush=True)
     try:
@@ -8386,8 +8389,10 @@ def gerar_carrossel(carrossel_id: str) -> int:
         # Estilo de capa (classic/house) tambem varia por carrossel.
         _CAPA_STYLE = brand_kit.pick_capa_style(carrossel_id)
         _CARROSSEL_SEED = str(carrossel_id)
+        _PATTERN_COLOR = brand_kit.pick_pattern_color(carrossel_id)
         print(
-            f"[carrossel] pagination={_PAGINATION_STYLE} capa={_CAPA_STYLE}",
+            f"[carrossel] pagination={_PAGINATION_STYLE} capa={_CAPA_STYLE} "
+            f"pattern={_PATTERN_COLOR}",
             flush=True,
         )
 
