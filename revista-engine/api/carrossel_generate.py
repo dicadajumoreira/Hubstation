@@ -6875,6 +6875,11 @@ def _slide_html(
             stem = _consvicta_pick_icon(titulo, body, fallback_ctx="capa")
             # Na capa o fundo eh sempre escuro (hero img) → icone branco.
             icon_url = _consvicta_icon_data_url(stem, "#FDFCF9")
+        elif _BRAND == "sindicompanybr":
+            # Brand Kit ja cobre a marca (logo recolorivel); nao usa o icone
+            # legado do bucket __icons na capa (senao o que for subido na
+            # galeria de Icons reaparece no canto da capa).
+            icon_url = ""
         else:
             icon_url = _icon_slot_data_url(2)
         icon_img = (
