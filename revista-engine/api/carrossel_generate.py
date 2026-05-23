@@ -6840,11 +6840,18 @@ def _slide_html(
         )
 
     if is_capa:
-        # Slide 1: foto na metade de cima + texto sobre overlay escuro embaixo
+        # Slide 1: foto na metade de cima + texto sobre overlay escuro embaixo.
+        # Sem foto: Sindicompany usa o gradiente Deep Sea (navy->purple);
+        # demais marcas mantem o fallback mint->onix.
+        _capa_grad = (
+            brand_kit.gradient_css("deep_sea")
+            if _BRAND == "sindicompanybr"
+            else f'linear-gradient(135deg, {p["mint"]} 0%, {p["onix"]} 100%)'
+        )
         bg = (
             f'<div class="hero-img" style="background-image: url(\'{foto_capa_url}\')"></div>'
             if foto_capa_url
-            else f'<div class="hero-img" style="background: linear-gradient(135deg, {p["mint"]} 0%, {p["onix"]} 100%);"></div>'
+            else f'<div class="hero-img" style="background: {_capa_grad};"></div>'
         )
         body_html = (
             f'<p class="capa-body">{_h_with_data(body, is_consvicta)}</p>'
@@ -7212,6 +7219,22 @@ def _slide_html(
                 "navy", opacity=0.08, position="right top", size="36%"
             )
 
+    # Brand Kit: receita de fundo. bg_color (hex) segue servindo o calculo
+    # de contraste; bg_css e o que pinta de fato. Sindicompany: CTA usa
+    # gradiente Deep Sea, respiro usa Sunset, conteudo mantem a cor base +
+    # glow radial sutil pra profundidade. Demais marcas: solido (legado).
+    bg_css = bg_color
+    glow_div = ""
+    if _BRAND == "sindicompanybr":
+        if is_cta:
+            bg_css = brand_kit.gradient_css("deep_sea")
+        elif is_frase:
+            bg_css = brand_kit.gradient_css("sunset")
+        else:
+            glow_div = brand_kit.sc_glow_overlay_html(
+                p["mint"], p["lavender"], op1=0.30, op2=0.26
+            )
+
     # Pattern de fundo:
     # - Slides internos: pattern ciclando, tile 800x800, 10% opacity
     # - CTA (ultimo): Consvicta usa picker dark; outras marcas fixam
@@ -7316,7 +7339,7 @@ def _slide_html(
   html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
   body {{
     font-family: {font_body};
-    background: {bg_color};
+    background: {bg_css};
     color: {fg_color};
     overflow: hidden;
     position: relative;
@@ -7572,6 +7595,7 @@ def _slide_html(
   }}
 </style></head>
 <body>
+  {glow_div}
   {pattern_div}
   {corner_overlay_div}
   {('<div class="ambient-grid"></div><div class="ambient-orb ambient-orb-gold"></div><div class="ambient-orb ambient-orb-tiff"></div>') if is_consvicta else ''}

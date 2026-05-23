@@ -86,6 +86,29 @@ def _pattern_data_url(filename: str) -> str:
     return url
 
 
+def _alpha_hex(op: float) -> str:
+    return f"{max(0, min(255, int(op * 255))):02x}"
+
+
+def sc_glow_overlay_html(
+    c1: str,
+    c2: str,
+    *,
+    op1: float = 0.30,
+    op2: float = 0.26,
+) -> str:
+    """Camada de glow radial (profundidade sutil) sobre o fundo do slide.
+    Dois focos de luz nas cores da marca, em cantos opostos. z-index 0."""
+    a1 = _alpha_hex(op1)
+    a2 = _alpha_hex(op2)
+    return (
+        '<div style="position:absolute;inset:0;z-index:0;pointer-events:none;'
+        "background:"
+        f"radial-gradient(circle at 82% 16%, {c1}{a1} 0%, transparent 46%),"
+        f'radial-gradient(circle at 10% 90%, {c2}{a2} 0%, transparent 48%)"></div>'
+    )
+
+
 def sc_corner_overlay_html(
     color_name: str,
     *,
