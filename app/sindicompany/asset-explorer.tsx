@@ -185,6 +185,21 @@ function HubView({
           <NoLibraryNote brand={brandLabel} />
         )}
 
+        {brand === "sindicompanybr" && (
+          <Link
+            href="/sindicompany/galeria"
+            className="block rounded-lg border border-onix-200 bg-white px-5 py-4 hover:border-mint-400 hover:shadow-sm transition"
+          >
+            <span className="text-sm font-semibold text-onix-900">
+              Ver galeria completa →
+            </span>
+            <p className="text-xs text-g60 mt-0.5">
+              Todos os assets (logos, ícones, patterns, fundos) numa tela só,
+              com exclusão.
+            </p>
+          </Link>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {ASSET_HIERARCHY.map((section) => (
             <Link
