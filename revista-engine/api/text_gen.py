@@ -846,12 +846,22 @@ def _aplicar_clean_recursivo(obj: Any) -> Any:
     return obj
 
 
-def gerar_dicas_praticas(mes: int, ano: int) -> dict[str, Any]:
-    """6 dicas práticas para convivência condominial neste mês."""
+def gerar_dicas_praticas(mes: int, ano: int, temas: str = "") -> dict[str, Any]:
+    """6 dicas práticas para convivência condominial neste mês. Se `temas`
+    (definidos no editorial, um por linha) vierem, as dicas seguem esses
+    temas; senão, geração livre por mês."""
     mes_nome = MESES_PT[mes - 1]
+    temas_txt = (temas or "").strip()
+    guia = (
+        "Baseie as dicas NESTES temas definidos no editorial (um por linha) — "
+        f"cubra-os na ordem, uma dica por tema quando possível:\n{temas_txt}\n\n"
+        if temas_txt
+        else ""
+    )
     prompt = (
         f"Gere 6 dicas práticas de convivência condominial pra edição de {mes_nome} de {ano}. "
-        f"Tom: leve, direto, prático. Cada dica é uma situação real do dia a dia "
+        + guia
+        + f"Tom: leve, direto, prático. Cada dica é uma situação real do dia a dia "
         f"(barulho, lixo, áreas comuns, mudança, pets). Conecte com a estação do ano "
         f"({mes_nome}) quando fizer sentido.\n\n"
         f'Responda JSON: {{ "titulo_secao": "...", "intro": "...", "dicas": [{{"titulo":"...","corpo":"..."}} x 6] }}'
@@ -865,6 +875,34 @@ def gerar_dicas_praticas(mes: int, ano: int) -> dict[str, Any]:
         ],
     }
     data = _gerar_json(prompt, fallback, expected_keys=["dicas"])
+    return _aplicar_clean_recursivo(data)
+
+
+def gerar_vida_condominial(tema: str, mes: int, ano: int) -> dict[str, Any]:
+    """Matéria editorial de 'Vida Condominial' (lifestyle) a partir do tema
+    definido no editorial. Devolve kicker/titulo/subtitulo/corpo."""
+    mes_nome = MESES_PT[mes - 1]
+    tema = (tema or "").strip()
+    prompt = (
+        f"Escreva uma matéria editorial de 'Vida Condominial' pra edição de "
+        f"{mes_nome} de {ano}, sobre o tema: \"{tema}\". Tom de revista — leve, "
+        f"humano, reflexivo — sobre convivência e lifestyle em condomínio. "
+        f"Cerca de 3 parágrafos no corpo (separados por linha em branco).\n\n"
+        f"Texto limpo: sem URLs, sem markdown.\n\n"
+        f'Responda JSON: {{ "kicker": "...", "titulo": "...", "subtitulo": "...", '
+        f'"corpo": "parágrafo 1\\n\\nparágrafo 2\\n\\nparágrafo 3" }}'
+    )
+    fallback = {
+        "kicker": "Vida Condominial",
+        "titulo": tema or "Boa convivência começa nos detalhes",
+        "subtitulo": "",
+        "corpo": (
+            "Viver bem em condomínio é, no fundo, um exercício diário de "
+            "respeito e atenção ao outro. Pequenos gestos constroem um "
+            "ambiente melhor pra todo mundo."
+        ),
+    }
+    data = _gerar_json(prompt, fallback, expected_keys=["titulo", "corpo"])
     return _aplicar_clean_recursivo(data)
 
 
@@ -1054,16 +1092,20 @@ def gerar_signos(mes: int, ano: int) -> dict[str, Any]:
     keys = ", ".join(slug for slug, _, _ in SIGNOS)
 
     prompt = (
-        f"Gere previsões astrológicas leves pros 12 signos pra {mes_nome} de {ano}. "
-        f"Tom: divertido, otimista, sem prometer coisas mirabolantes. 1 a 2 frases por signo, "
-        f"foco em convivência, autocuidado, dia a dia. Sem clichês de horóscopo de revista popular.\n\n"
+        f"Pesquise NA WEB as tendências astrológicas de {mes_nome} de {ano} em "
+        f"portais, revistas e colunas especializadas de astrologia (ex.: Personare, "
+        f"João Bidu, Quem/horóscopo, Vogue/astrologia, Catraca Livre). Com base no "
+        f"clima astral do mês (trânsitos, signo do mês), gere previsões leves pros 12 "
+        f"signos. Tom: divertido, otimista, sem prometer coisas mirabolantes. 1 a 2 "
+        f"frases por signo, foco em convivência, autocuidado, dia a dia. Sem clichês.\n\n"
+        f"NÃO cite URLs, veículos nem markdown no texto — só prosa limpa.\n\n"
         f"As chaves do JSON precisam ser EXATAMENTE: {keys} (sem acentos).\n\n"
         f'JSON: {{ "previsoes": {{ "aries": "...", "touro": "...", ..., "peixes": "..." }} }}'
     )
     fallback = {
         "previsoes": {slug: f"{mes_nome} convida a olhar pra dentro com calma." for slug, _, _ in SIGNOS}
     }
-    data = _gerar_json(prompt, fallback, expected_keys=["previsoes"])
+    data = _gerar_json(prompt, fallback, expected_keys=["previsoes"], use_web_search=True)
     return _aplicar_clean_recursivo(data)
 
 

@@ -86,6 +86,7 @@ from api.text_gen import (
     gerar_curiosidades,
     gerar_dica_receita,
     gerar_dicas_praticas,
+    gerar_vida_condominial,
     gerar_receita_completa,
     gerar_materia_capa_completa,
     gerar_novidades,
@@ -321,8 +322,10 @@ def build_inputs_from_db(
     if blocos:
         cover_story_inputs["corpo_blocos"] = blocos
 
-    # ---- S05 Dicas Práticas — geradas por mês
-    dicas_ai = gerar_dicas_praticas(mes_int, ano_int)
+    # ---- S05 Dicas Práticas — seguem os temas do editorial (se houver)
+    dicas_ai = gerar_dicas_praticas(
+        mes_int, ano_int, (ed.get("dicas_praticas_temas") or "")
+    )
     tips_inputs = {
         "mes_referencia": mes_ano,
         "titulo_secao": dicas_ai.get("titulo_secao", TIPS_DEFAULT["titulo_secao"]),
@@ -458,9 +461,15 @@ def build_inputs_from_db(
     if revista.get("multas_advertencias_obs"):
         warnings_inputs["observacao"] = revista["multas_advertencias_obs"]
 
-    # ---- S12B Vida Condominial: gera foto se faltar
+    # ---- S12B Vida Condominial: tema do editorial gera a matéria; gera foto.
     life_inputs = dict(LIFE_DEFAULT)
     life_inputs["mes_referencia"] = mes_ano
+    _vida_tema = (ed.get("vida_condominial_tema") or "").strip()
+    if _vida_tema:
+        vida_ai = gerar_vida_condominial(_vida_tema, mes_int, ano_int)
+        for _k in ("kicker", "titulo", "subtitulo", "corpo"):
+            if vida_ai.get(_k):
+                life_inputs[_k] = vida_ai[_k]
     if not life_inputs.get("foto_principal"):
         foto_life = gerar_foto_lifestyle(
             life_inputs.get("titulo", ""),
