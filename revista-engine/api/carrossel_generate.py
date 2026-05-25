@@ -7309,10 +7309,15 @@ def _slide_html(
     # cyan mais visivel; conteudo claro usa navy bem sutil.
     corner_overlay_div = ""
     if _BRAND == "sindicompanybr" and not is_frase:
+        _stat = "" if is_cta else brand_kit.detect_stat(body)
         if is_cta:
             corner_overlay_div = brand_kit.sc_corner_overlay_html(
                 "cyan", opacity=0.15, position="right top", size="44%"
             )
+        elif _stat:
+            # Slide com dado claro (%, R$, "3 meses") -> stat block (numero
+            # de destaque) no lugar da decoracao. So quando ha o dado.
+            corner_overlay_div = brand_kit.sc_stat_block_html(_stat, titulo_color)
         else:
             # Decoracao rotativa: cada slide ganha uma forma/posicao de
             # pattern diferente (ou o acento symbolPhoto), em opacidade baixa.
