@@ -12,6 +12,7 @@ purple/white. Aqui ficam os tokens que ainda nao estavam estruturados.
 
 import base64
 import os
+import re
 
 # ---------------------------------------------------------------------------
 # Tokens (Brand Hub 2026-05)
@@ -655,4 +656,41 @@ def sc_quote_mark_html(
         f'<div style="font-family:{font};font-weight:800;font-size:{size}px;'
         f"line-height:0.62;color:{color};opacity:0.9;margin-bottom:-0.12em;"
         f'pointer-events:none">“</div>'
+    )
+
+
+# ---------------------------------------------------------------------------
+# Stat block (familia "Elementos") — numero de destaque por slide
+# ---------------------------------------------------------------------------
+# Quando o corpo do slide tem um dado claro (%, R$, "3 meses"), vira um
+# numero grande no canto, na cor da marca. So entra quando ha um stat
+# (detecao de conteudo) — nunca forca um numero onde nao existe.
+
+_STAT_RX = re.compile(
+    r"(R\$\s?\d[\d.,]*\s?(?:mil|mi|milhões|milhoes|bi|bilhões|bilhoes)?"
+    r"|\d{1,3}(?:[.,]\d+)?\s?%"
+    r"|\d+\s?(?:meses|mês|mes|dias|dia|anos|ano|horas|hora|min))",
+    re.IGNORECASE,
+)
+
+
+def detect_stat(text: str) -> str:
+    """Primeiro dado de destaque no texto (%, R$, duracao). '' se nao houver.
+    Ignora marcadores de destaque [[ ]] / ~~ ~~."""
+    clean = (text or "").replace("[[", "").replace("]]", "").replace("~~", "")
+    m = _STAT_RX.search(clean)
+    return m.group(0).strip() if m else ""
+
+
+def sc_stat_block_html(value: str, color: str) -> str:
+    """Numero de destaque grande, alinhado a direita (meio-alto do slide).
+    Tamanho adapta ao comprimento pra nao estourar."""
+    n = len(value)
+    size = 220 if n <= 4 else 168 if n <= 7 else 120
+    return (
+        f'<div style="position:absolute;top:300px;right:170px;z-index:2;'
+        f"max-width:1100px;text-align:right;font-family:'Epilogue',sans-serif;"
+        f"font-weight:800;color:{color};line-height:0.82;"
+        f'letter-spacing:-0.04em;font-size:{size}px;pointer-events:none">'
+        f"{value}</div>"
     )
