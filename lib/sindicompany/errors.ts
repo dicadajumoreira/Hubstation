@@ -93,6 +93,9 @@ const COLUMN_TO_MIGRATION: Record<string, string> = {
   carta_sindico_texto: "20260510_revistas_cartas.sql",
   carta_gestor_tema: "20260510_revistas_cartas.sql",
   carta_gestor_texto: "20260510_revistas_cartas.sql",
+  // 20260547
+  dicas_praticas_temas: "20260547_editorial_dicas_vida.sql",
+  vida_condominial_tema: "20260547_editorial_dicas_vida.sql",
   // 20260513
   logo_url: "20260513_logo_e_gestor_revista.sql",
   gestor_foto_url: "20260513_logo_e_gestor_revista.sql",

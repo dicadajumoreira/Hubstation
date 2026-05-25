@@ -26,6 +26,8 @@ export interface Editorial {
   receita_descricao: string | null;
   carta_sindico_tema: string | null;
   carta_gestor_tema: string | null;
+  dicas_praticas_temas: string | null;
+  vida_condominial_tema: string | null;
   notas_editor_geral: string | null;
   created_at: string;
   updated_at: string;
@@ -41,6 +43,8 @@ export interface EditorialInput {
   receita_descricao?: string;
   carta_sindico_tema?: string;
   carta_gestor_tema?: string;
+  dicas_praticas_temas?: string;
+  vida_condominial_tema?: string;
   notas_editor_geral?: string;
 }
 
@@ -82,6 +86,8 @@ export async function upsertEditorial(input: EditorialInput): Promise<Editorial>
         receita_descricao: input.receita_descricao ?? null,
         carta_sindico_tema: input.carta_sindico_tema ?? null,
         carta_gestor_tema: input.carta_gestor_tema ?? null,
+        dicas_praticas_temas: input.dicas_praticas_temas ?? null,
+        vida_condominial_tema: input.vida_condominial_tema ?? null,
         notas_editor_geral: input.notas_editor_geral ?? null,
       },
       { onConflict: "mes,ano" },
