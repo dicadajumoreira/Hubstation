@@ -10,6 +10,7 @@ import {
   listCondoMetas,
   listPatternUrls,
 } from "@/lib/sindicompany/condominios-db";
+import { listEquipeAtendimentoGlobal } from "@/lib/sindicompany/equipe-atendimento";
 import { PrintButton } from "./print-button";
 
 async function resolveCondoNome(slug: string): Promise<string | null> {
@@ -76,7 +77,11 @@ export default async function RevistaBoasVindasPage({
   // (default true). Nome e cargo aparecem sempre.
   const mostrarWhatsSindico = meta ? meta.mostrar_whatsapp_sindico !== false : true;
   const mostrarEmailSindico = meta ? meta.mostrar_email_sindico !== false : true;
-  const equipe = (meta?.equipe_atendimento ?? []).filter((m) => m.nome || m.cargo);
+  // Equipe de atendimento: fonte única é a global (tela própria), não mais
+  // por condomínio.
+  const equipe = (await listEquipeAtendimentoGlobal().catch(() => [])).filter(
+    (m) => m.nome || m.cargo,
+  );
   const comunidadeUrl = meta?.comunidade_url ?? "";
   const qrUrl = meta?.comunidade_qrcode_path ? getCondoFotoPublicUrl(meta.comunidade_qrcode_path) : null;
   const capaUrl = meta?.boasvindas_capa_path ? getCondoFotoPublicUrl(meta.boasvindas_capa_path) : null;
@@ -382,7 +387,7 @@ export default async function RevistaBoasVindasPage({
             {equipe.length > 0 && (
               <div style={{ marginTop: "10mm", width: "100%" }}>
                 <div style={{ fontSize: "8.5pt", letterSpacing: ".22em", textTransform: "uppercase", color: "#84C7D3", fontWeight: 700, marginBottom: "4mm" }}>
-                  Equipe de atendimento do condomínio
+                  Equipe de atendimento
                 </div>
                 <div style={{ display: "flex", gap: "5mm", flexWrap: "wrap", justifyContent: "center" }}>
                   {equipe.map((m, i) => {
