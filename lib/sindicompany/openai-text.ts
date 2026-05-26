@@ -35,16 +35,17 @@ const FORMATO_INSTRUCOES: Record<string, string> = {
     `  2 a N-1: um item por slide — número no título + explicação curta no body.\n` +
     `  último: CTA "Qual você não sabia? Comenta o número aqui".`,
   mito_verdade:
-    `FORMATO: MITO VS VERDADE (crenças erradas difundidas).\n` +
-    `- Sempre em PARES: Mito num slide, Verdade no slide seguinte.\n` +
-    `- O mito precisa SOAR RAZOÁVEL — senão não tem impacto desmistificar.\n` +
-    `- A verdade precisa ser ESPECÍFICA: "a lei diz exatamente o oposto", não "não é bem assim". Cite artigo/REsp quando der.\n` +
-    `- MÁXIMO 3 pares por carrossel.\n` +
-    `ESTRUTURA DE SLIDES:\n` +
-    `  1 (capa): "Você acredita em algum desses mitos sobre condomínio?". + tarja FORMATO.\n` +
-    `  2,3: Mito 1 → Verdade 1.  4,5: Mito 2 → Verdade 2.  (e assim por diante até 3 pares)\n` +
-    `  No tipo de cada slide: use "mito" pros slides de mito e "verdade" pros de verdade.\n` +
-    `  último: CTA "Qual mito você acreditava? Comenta aqui".`,
+    `FORMATO: MITO VS VERDADE (mito jurídico universalmente vivido — a fórmula que MAIS viralizou).\n` +
+    `- FOQUE EM UM ÚNICO MITO, desenvolvido a fundo. NUNCA vários pares rasos de mito/verdade.\n` +
+    `- O mito tem que ser uma CRENÇA que quase todo mundo já assumiu como óbvia ("o síndico tem obrigação de resolver, né?") — não um mito técnico que ninguém comenta.\n` +
+    `- A verdade precisa ser ESPECÍFICA: "a regra/lei diz exatamente o oposto", não "não é bem assim". Cite artigo/REsp quando der.\n` +
+    `FÓRMULA DA CAPA (siga À RISCA — é o que viralizou):\n` +
+    `  (1) uma CENA concreta do dia a dia que todo mundo já viveu, curtíssima ("Vizinho barulhento às 3h. Você liga pro síndico.");\n` +
+    `  (2) a CRENÇA óbvia logo em seguida, com uma CONTRADIÇÃO curta (2 a 3 palavras) marcada entre [[ ]] — ex: "[[obrigação de resolver]]", "[[caso do síndico]]";\n` +
+    `  (3) termine com PERGUNTA BINÁRIA (sim/não) — "né?", "certo?", "ele tem que resolver, né?". + tarja FORMATO.\n` +
+    `ESTRUTURA DOS SLIDES (arco de UM mito só): capa → MITO (enuncia a crença errada) → O PROBLEMA (a consequência real de acreditar nisso) → VERDADE (o que a regra realmente diz, específico) → O QUE FAZER (passos práticos, lista numerada) → CTA.\n` +
+    `  No tipo de cada slide: use "mito" no slide do mito e "verdade" no da verdade.\n` +
+    `  CTA (último): uma frase de CONTRADIÇÃO memorável ("Síndico bom não resolve tudo. Ele resolve o que é dele resolver.") + PERGUNTA BINÁRIA, terminando com "[[Comenta SIM ou NÃO]]".`,
   antes_depois:
     `FORMATO: ANTES / DEPOIS (resultado tangível de gestão profissional).\n` +
     `- O "depois" precisa ter NÚMERO concreto: "caiu de 23% pra 4% em 6 meses", não "melhorou muito".\n` +
