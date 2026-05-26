@@ -1359,6 +1359,7 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
     briefing = (carrossel.get("briefing") or "").strip()
     objetivo = (carrossel.get("objetivo") or "").strip()
     assunto_sugerido = random.choice(_ASSUNTOS_CONFLITO)
+    variacao_seed = "".join(random.choice("abcdefghijklmnopqrstuvwxyz0123456789") for _ in range(6))
 
     formato_label = formato.replace("_", " ")
     instrucoes_formato = FORMATO_INSTRUCOES.get(
@@ -1493,7 +1494,8 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"A ASSINATURA '{assinatura}' aparece SO na legenda, nunca nos slides. "
         f"Use a estrutura de slides do FORMATO acima; a voz aqui e o tom de cada slide.\n\n"
         f"REGRAS GERAIS:\n"
-        f"- VARIE O ASSUNTO (regra CRITICA): se o tema/briefing ja aponta um conflito especifico, siga-o. Se o tema for GENERICO ('historias de condominio', 'mitos e verdades', 'polemicas de predio', etc.), escolha um conflito condominial CONCRETO e ESPECIFICO — e NUNCA caia sempre no 'vizinho barulhento'. O universo e enorme: animais, vaga de garagem, obras/reforma, inadimplencia/taxa extra, area comum (salao, piscina, churrasqueira), mudanca fora de hora, cigarro, vazamento entre unidades, lixo no corredor, cameras/privacidade, aluguel por temporada, grupo de WhatsApp, prestacao de contas, conselho x sindico, administradora, zelador, fachada, portaria, etc. Para ESTE post, parta de: {assunto_sugerido} (use como semente — pode adaptar ou trocar por outro, so NAO repita sempre o mesmo assunto).\n"
+        f"- TEMA = CATEGORIA, NUNCA ROTEIRO PRONTO: o tema '{tema}' e so a BASE. A CADA novo carrossel, escolha um RECORTE especifico e DIFERENTE dentro do tema, pra que dois posts do mesmo tema nunca saiam iguais. Ex: tema 'barulho' -> barulho de cachorro, de crianca correndo, de salto no piso, de festa, de reforma, de movel arrastado, de TV alta. Evite o recorte mais obvio. Se o tema JA for um recorte especifico, traga uma SITUACAO nova dentro dele.\n"
+        f"- SEMENTE DE VARIACAO (use pra fugir do padrao e escolher um recorte menos obvio, diferente do que voce geraria por default): {variacao_seed}. Se o tema estiver vazio ou muito generico ('historias de condominio', 'mitos e verdades', 'polemicas de predio'), puxe pra um conflito condominial concreto como: {assunto_sugerido} (so uma semente — varie a cada post).\n"
         f"- Capa: NUNCA escreva o tema '{tema}' como titulo nem o repita literalmente — o tema e so o ASSUNTO que guia o conteudo, nao vira texto do slide. A capa entra DIRETO no gancho. Capa inteira (titulo + body) tem no max 20 palavras.\n"
         f"- HOOK DA CAPA (prioridade maxima): o titulo da capa e a frase que PARA O SCROLL — verdade incomoda, identificacao, tensao ou curiosidade. Curto, leitura instantanea no celular. NUNCA slogan corporativo ou frase que comeca devagar.\n"
         f"- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: 'WhatsApp [[nao e assembleia]].'. So no titulo da capa.\n"
