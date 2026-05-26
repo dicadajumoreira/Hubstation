@@ -46,6 +46,12 @@ _BRAND = "sindicompanybr"
 # (legado) ou a capa classica se a env nao estiver setada.
 _COVER_ARCHETYPE = ""
 
+# Formato do carrossel (mito_verdade, historia_real...). Setado em
+# gerar_carrossel; usado pelos arquetipos de capa que renderizam a tarja
+# de FORMATO (ex: foto-editorial), ja que a assinatura das funcoes de
+# arquetipo nao recebe o formato.
+_FORMATO = ""
+
 # Estilo de paginacao do slide (dots/ticks/bar/index), escolhido UMA vez
 # por carrossel em gerar_carrossel pra variar entre carrosseis. Vazio = dots.
 _PAGINATION_STYLE = ""
@@ -2528,6 +2534,125 @@ def _capa_dark_premium(
     {body_html}
   </div>
   <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_foto_editorial(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-26 — capa "Foto Editorial".
+
+    Formaliza como arquetipo NOMEADO o layout editorial da capa classica:
+    foto full-bleed + vignette + degrade escuro na metade de baixo, tarja de
+    FORMATO (contorno fino, caixa-alta, tracking largo), titulo branco grande,
+    subtitulo na cor sand e o simbolo da casa no canto inferior direito.
+    Sem foto cai num fundo Navy solido. Le o formato do global _FORMATO pra
+    montar a tarja; o trecho [[...]] do titulo vira destaque cyan."""
+    badge_txt = _formato_label(_FORMATO) if _FORMATO else ""
+    badge_html = (
+        f'<span class="badge">{_h(badge_txt)}</span>' if badge_txt else ""
+    )
+    body_html = f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    if foto_capa_url:
+        photo_layer = (
+            f'<div class="photo" style="background-image: url(\'{foto_capa_url}\')"></div>'
+            '<div class="vignette"></div>'
+            '<div class="overlay"></div>'
+        )
+    else:
+        photo_layer = '<div class="solid-navy"></div><div class="overlay"></div>'
+    house_corner = ""
+    if _BRAND in ("sindicompanybr", "bysindicompany"):
+        _sym = brand_kit.sc_symbol_html(440, _SC_CYAN)
+        if _sym:
+            house_corner = f'<div class="house-corner">{_sym}</div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_NAVY};
+    color: #ffffff;
+    overflow: hidden;
+    position: relative;
+  }}
+  .photo {{
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background-size: cover; background-position: center;
+    background-repeat: no-repeat; z-index: 0;
+  }}
+  .solid-navy {{ position: absolute; inset: 0; background: {_SC_NAVY}; z-index: 0; }}
+  .vignette {{
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(24,32,40,0.45) 100%);
+  }}
+  .overlay {{
+    position: absolute; top: 48%; left: 0; right: 0; bottom: 0; z-index: 1;
+    background: linear-gradient(180deg,
+      rgba(24,32,40,0.0) 0%,
+      rgba(24,32,40,0.86) 20%,
+      rgba(24,32,40,0.97) 100%);
+  }}
+  .logo-top {{
+    position: absolute; top: 100px; left: 180px;
+    width: 720px; max-height: 220px; object-fit: contain; z-index: 5;
+  }}
+  .content {{
+    position: absolute; left: 180px; right: 180px;
+    top: 50%; bottom: 0; z-index: 3;
+    padding: 100px 0 240px;
+    display: flex; flex-direction: column; justify-content: center;
+  }}
+  .badge {{
+    display: inline-block; align-self: flex-start;
+    border: 4px solid rgba(255,255,255,0.65); background: transparent;
+    color: #ffffff; font-family: {font_body}; font-weight: 700;
+    font-size: 64px; letter-spacing: 0.30em; text-transform: uppercase;
+    padding: 28px 56px; border-radius: 10px; margin-bottom: 56px;
+  }}
+  .capa-titulo {{
+    font-family: {font_display}; font-weight: 900; font-size: 257px;
+    line-height: 0.95; letter-spacing: -0.015em; color: #ffffff;
+    text-wrap: balance;
+  }}
+  .hook-hl {{
+    color: {_SC_CYAN};
+    background-image: linear-gradient(transparent 60%, {_SC_CYAN}33 60%);
+    background-repeat: no-repeat;
+  }}
+  .capa-body {{
+    font-family: {font_body}; font-weight: 400; font-size: 132px;
+    line-height: 1.18; color: {_SC_BEIGE}; margin-top: 60px; max-width: 24ch;
+  }}
+  .handle {{
+    position: absolute; bottom: 110px; left: 180px; z-index: 4;
+    font-family: {font_body}; font-weight: 600; font-size: 64px;
+    color: {_SC_CYAN}; letter-spacing: 0.04em;
+  }}
+  .house-corner {{ position: absolute; bottom: 96px; right: 150px; z-index: 2; }}
+</style></head>
+<body>
+  {photo_layer}
+  {logo_top_img}
+  <div class="content">
+    {badge_html}
+    <h1 class="capa-titulo">{_h_hook(titulo, False)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+  {house_corner}
 </body></html>
 """
 
@@ -6773,7 +6898,8 @@ COVER_ARCHETYPES_SC = {
     "brackets": _capa_brackets,
     "type-tower": _capa_type_tower,
     "corner-tape": _capa_corner_tape,
-    # COM foto (10) — consomem foto_capa_url da etapa 3
+    # COM foto (11) — consomem foto_capa_url da etapa 3
+    "foto-editorial": _capa_foto_editorial,
     "dark-premium": _capa_dark_premium,
     "magazine-cover": _capa_magazine_cover,
     "split-portrait": _capa_split_portrait,
@@ -8399,7 +8525,7 @@ def _ensure_cta(
 def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
     global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE, _BRAND_PREFIX, _BRAND_HANDLE
-    global _BRAND_TIPOGRAFIA, _BRAND_NAME, _PAGINATION_STYLE, _CAPA_STYLE
+    global _BRAND_TIPOGRAFIA, _BRAND_NAME, _PAGINATION_STYLE, _CAPA_STYLE, _FORMATO
     global _CARROSSEL_SEED, _PATTERN_COLOR
     global _SC_NAVY, _SC_CYAN, _SC_BEIGE, _SC_LAVENDER, _SC_PURPLE, _SC_PAPER, _SC_PAPER_WARM
     print(f"[carrossel] iniciando geração de {carrossel_id}", flush=True)
@@ -8468,6 +8594,7 @@ def gerar_carrossel(carrossel_id: str) -> int:
         ca_db = (carrossel.get("cover_archetype") or "").strip().lower()
         ca_env = os.environ.get("SINDICOMPANY_COVER_ARCHETYPE", "").strip().lower()
         _COVER_ARCHETYPE = ca_db or ca_env
+        _FORMATO = (carrossel.get("formato") or "").strip()
         if _COVER_ARCHETYPE:
             print(
                 f"[carrossel] cover_archetype={_COVER_ARCHETYPE}"

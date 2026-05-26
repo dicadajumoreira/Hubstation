@@ -31,6 +31,7 @@ export type CarrosselCoverArchetype =
   | "brackets"
   | "type-tower"
   | "corner-tape"
+  | "foto-editorial"
   | "dark-premium"
   | "magazine-cover"
   | "split-portrait"
@@ -56,7 +57,8 @@ export const CARROSSEL_COVER_ARCHETYPES: {
   { id: "brackets", label: "Brackets", hasPhoto: false, hint: "Colchetes Beige gigantes envolvendo headline" },
   { id: "type-tower", label: "Type tower", hasPhoto: false, hint: "Palavras empilhadas em tamanhos crescentes" },
   { id: "corner-tape", label: "Corner tape", hasPhoto: false, hint: "Fitas Cyan diagonais nos 4 cantos + headline centralizada" },
-  // COM foto (10) — consomem foto_capa_url da etapa 3
+  // COM foto (11) — consomem foto_capa_url da etapa 3
+  { id: "foto-editorial", label: "Foto Editorial", hasPhoto: true, hint: "Foto full + degradê + tarja de formato + título e subtítulo (capa clássica nomeada)" },
   { id: "dark-premium", label: "Dark Premium", hasPhoto: true, hint: "Foto full + gradient Navy" },
   { id: "magazine-cover", label: "Magazine cover", hasPhoto: true, hint: "Masthead + foto + faixa Paper" },
   { id: "split-portrait", label: "Split portrait", hasPhoto: true, hint: "Foto 45% esquerda + texto 55% Paper" },
