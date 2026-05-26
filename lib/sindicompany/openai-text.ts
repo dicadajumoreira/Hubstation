@@ -501,7 +501,7 @@ export async function gerarTresCopies(input: {
     `ESTRUTURA: use o FORMATO acima e EXATAMENTE ${input.n_slides} slides. Se a persona sugerir outra contagem/estrutura, o FORMATO e a quantidade de slides deste post MANDAM.\n\n` +
     `REGRAS:\n` +
     temperaturaGuidance(marca?.temperatura) +
-    `- Capa: o tema "${input.tema}" aparece literal ou em paráfrase clara. Capa inteira (titulo + body) tem no máximo 20 palavras.\n` +
+    `- Capa: NUNCA escreva o tema "${input.tema}" como título nem o repita literalmente — o tema é só o ASSUNTO que guia o conteúdo, não vira texto do slide. A capa entra DIRETO no gancho. Capa inteira (titulo + body) tem no máximo 20 palavras.\n` +
     `- HOOK DA CAPA (prioridade máxima): o título da capa é a frase que PARA O SCROLL — verdade incômoda, identificação, tensão ou curiosidade. Curto, leitura instantânea no celular. NUNCA slogan corporativo, frase genérica ou que começa devagar; deve funcionar sozinho, sem depender de contexto.\n` +
     `- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: "WhatsApp [[não é assembleia]].", "O síndico cansado começa a [[perder autoridade]].". Marque [[ ]] APENAS no título da capa (slide 1), nunca nos outros slides nem na legenda.\n` +
     `- ÂNCORAS DE ATENÇÃO (retenção): nos slides de conteúdo, marque com [[ ]] dentro do BODY no máximo 1 trecho de alto impacto por slide (no máximo +1 secundário) — verdade incômoda, identificação, tensão, frase memorável OU uma PALAVRA MAGNÉTICA: caos, silêncio, pressão, desgaste, autoridade, conflito, refém, invisível, bastidor, premium, processo, improviso, abandono, controle, presença, sobrecarga, suporte, confiança, clareza, método, crise. NUNCA mais de 2 por slide; destacar demais tira a força.\n` +

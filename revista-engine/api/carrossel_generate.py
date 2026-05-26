@@ -1444,7 +1444,7 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"A ASSINATURA '{assinatura}' aparece SO na legenda, nunca nos slides. "
         f"Use a estrutura de slides do FORMATO acima; a voz aqui e o tom de cada slide.\n\n"
         f"REGRAS GERAIS:\n"
-        f"- Capa: o tema '{tema}' aparece literal ou em parafrase clara. Capa inteira (titulo + body) tem no max 20 palavras.\n"
+        f"- Capa: NUNCA escreva o tema '{tema}' como titulo nem o repita literalmente — o tema e so o ASSUNTO que guia o conteudo, nao vira texto do slide. A capa entra DIRETO no gancho. Capa inteira (titulo + body) tem no max 20 palavras.\n"
         f"- HOOK DA CAPA (prioridade maxima): o titulo da capa e a frase que PARA O SCROLL — verdade incomoda, identificacao, tensao ou curiosidade. Curto, leitura instantanea no celular. NUNCA slogan corporativo ou frase que comeca devagar.\n"
         f"- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: 'WhatsApp [[nao e assembleia]].'. So no titulo da capa.\n"
         f"- ANCORAS DE ATENCAO (retencao): nos slides de conteudo, marque com [[ ]] no BODY no maximo 1 trecho de alto impacto por slide (+1 secundario no maximo) — verdade incomoda, identificacao, tensao, frase memoravel ou PALAVRA MAGNETICA (caos, silencio, pressao, desgaste, autoridade, conflito, refem, invisivel, bastidor, premium, processo, improviso, abandono, controle, presenca, sobrecarga, suporte, confianca, clareza, metodo, crise). NUNCA mais de 2 por slide.\n"
