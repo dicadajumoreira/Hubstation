@@ -415,13 +415,13 @@ export default async function NovaEdicaoPage({
             />
           </Field>
 
-          <Field label="Dashboard de prestação (imagem ou PDF)"
-                 hint="Print do dashboard ou PDF do balancete deste mês. A IA lê e preenche 'Nossos Números'. Upload direto pro Storage.">
+          <Field label="Dashboard de prestação (imagem, PDF ou HTML)"
+                 hint="Print/PDF do balancete OU o dashboard em HTML. A IA lê e preenche 'Nossos Números' com cards. Upload direto pro Storage.">
             <DirectUploadField
               kind="prestacao"
               hiddenInputName="prestacao_arquivo_url_uploaded"
               initialUrl={undefined}
-              accept="image/jpeg,image/png,image/webp,application/pdf"
+              accept="image/jpeg,image/png,image/webp,application/pdf,text/html,.html"
               maxBytes={50 * 1024 * 1024}
             />
           </Field>

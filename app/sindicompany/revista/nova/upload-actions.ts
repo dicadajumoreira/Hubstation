@@ -27,7 +27,7 @@ import {
   PATTERN_MAX_SLOTS,
 } from "@/lib/sindicompany/condominios-db";
 
-const ALLOWED_PRESTACAO_EXT = new Set(["jpg", "jpeg", "png", "webp", "pdf"]);
+const ALLOWED_PRESTACAO_EXT = new Set(["jpg", "jpeg", "png", "webp", "pdf", "html"]);
 const ALLOWED_IMG_EXT = new Set(["jpg", "jpeg", "png", "webp"]);
 const ALLOWED_VECTOR_EXT = new Set(["jpg", "jpeg", "png", "webp", "svg"]);
 
@@ -63,7 +63,7 @@ export async function getPrestacaoUploadIntent(
   }
   const e = ext.toLowerCase().replace(/^\./, "");
   if (!ALLOWED_PRESTACAO_EXT.has(e)) {
-    return { ok: false, error: "Extensão precisa ser jpg, png, webp ou pdf." };
+    return { ok: false, error: "Extensão precisa ser jpg, png, webp, pdf ou html." };
   }
   if (!condominio) return { ok: false, error: "Condomínio inválido." };
   try {
