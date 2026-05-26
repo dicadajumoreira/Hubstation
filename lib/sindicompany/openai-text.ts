@@ -41,7 +41,7 @@ const FORMATO_INSTRUCOES: Record<string, string> = {
     `- O mito tem que ser uma CRENÇA que quase todo mundo já assumiu como óbvia ("o síndico tem obrigação de resolver, né?") — não um mito técnico que ninguém comenta.\n` +
     `- A verdade precisa ser ESPECÍFICA: "a regra/lei diz exatamente o oposto", não "não é bem assim". Cite artigo/REsp quando der.\n` +
     `FÓRMULA DA CAPA (siga À RISCA — é o que viralizou):\n` +
-    `  (1) uma CENA concreta do dia a dia que todo mundo já viveu, curtíssima ("Vizinho barulhento às 3h. Você liga pro síndico.");\n` +
+    `  (1) uma CENA concreta do dia a dia que todo mundo já viveu, curtíssima e ESPECÍFICA do assunto escolhido (varie — NÃO use sempre vizinho/barulho);\n` +
     `  (2) a CRENÇA óbvia logo em seguida, com uma CONTRADIÇÃO curta (2 a 3 palavras) marcada entre [[ ]] — ex: "[[obrigação de resolver]]", "[[caso do síndico]]";\n` +
     `  (3) termine com PERGUNTA BINÁRIA (sim/não) — "né?", "certo?", "ele tem que resolver, né?". + tarja FORMATO.\n` +
     `ESTRUTURA DOS SLIDES (arco de UM mito só): capa → MITO (enuncia a crença errada) → O PROBLEMA (a consequência real de acreditar nisso) → VERDADE (o que a regra realmente diz, específico) → O QUE FAZER (passos práticos, lista numerada) → CTA.\n` +
@@ -429,6 +429,44 @@ const NOMES_PERSONAGEM = [
   "Fábio", "Daniela", "Otávio", "Mariana", "Ricardo", "Cláudia", "Renato",
 ];
 
+// Pool de ASSUNTOS de conflito condominial. Um é injetado por geração como
+// SEMENTE pra evitar que o modelo caia sempre no mesmo (ex: "vizinho
+// barulhento") quando o tema é genérico ("histórias de condomínio", "mitos
+// e verdades"). Cada chamada é stateless, então sem isso ele ancora no
+// exemplo do prompt. Tema específico continua mandando.
+const ASSUNTOS_CONFLITO = [
+  "cachorro que late o dia inteiro",
+  "fezes de pet não recolhidas na área comum",
+  "vaga de garagem usada por quem não devia",
+  "reforma fora do horário permitido",
+  "obra sem autorização do condomínio",
+  "inadimplência e o rateio que sobra pros outros",
+  "cobrança de taxa extra polêmica",
+  "disputa pelo salão de festas / churrasqueira",
+  "uso da piscina fora das regras",
+  "mudança no fim de semana / fora de hora",
+  "fumaça de cigarro que invade o apê vizinho",
+  "vazamento entre unidades e quem paga o conserto",
+  "lixo deixado no corredor",
+  "bicicleta ou patinete no elevador social",
+  "câmeras e privacidade dos moradores",
+  "aluguel por temporada (Airbnb) no prédio",
+  "vaga de visitante sempre ocupada",
+  "brigas no grupo de WhatsApp do condomínio",
+  "prestação de contas questionada na assembleia",
+  "conselho contra o síndico",
+  "troca de administradora",
+  "demissão do zelador antigo",
+  "ar-condicionado ou antena instalado na fachada",
+  "planta que pinga na varanda de baixo",
+  "criança brincando na garagem ou áreas de circulação",
+  "morador que estaciona em local proibido",
+  "acesso de entregador / delivery na portaria",
+  "festa que varou a madrugada",
+  "animal de grande porte no elevador",
+  "estendimento de roupa na janela / fachada",
+];
+
 /** Gera 3 versões de copy pra carrossel — angulos editoriais distintos.
  *  O `brand` muda a estrategia (publico, objetivo, linguagem, assinatura).
  *  O `objetivo` define tom/gancho/CTA/formato/sucesso (mapas distintos
@@ -486,6 +524,10 @@ export async function gerarTresCopies(input: {
       input.formato === "historia_real"
         ? `- PERSONAGEM: neste roteiro o protagonista se chama ${nomePersonagem}. Varie os nomes dos personagens secundários e nunca repita sempre o mesmo nome.\n`
         : "";
+    const assuntoSugerido =
+      ASSUNTOS_CONFLITO[Math.floor(Math.random() * ASSUNTOS_CONFLITO.length)];
+    const assuntoDirective =
+      `- VARIE O ASSUNTO (regra CRÍTICA): se o tema/briefing já aponta um conflito específico, siga-o. Se o tema for GENÉRICO ("histórias de condomínio", "mitos e verdades", "polêmicas de prédio", etc.), escolha um conflito condominial CONCRETO e ESPECÍFICO — e NUNCA caia sempre no "vizinho barulhento". O universo é enorme: animais, vaga de garagem, obras/reforma, inadimplência/taxa extra, área comum (salão, piscina, churrasqueira), mudança fora de hora, cigarro, vazamento entre unidades, lixo no corredor, câmeras/privacidade, aluguel por temporada, grupo de WhatsApp, prestação de contas, conselho x síndico, administradora, zelador, fachada, portaria, etc. Para ESTE post, parta de: ${assuntoSugerido} (use como semente — pode adaptar ou trocar por outro do universo, só NÃO repita sempre o mesmo assunto).\n`;
     return (
     `Crie UMA versão de copy pra um carrossel do ${handle}.\n` +
     `A VOZ, o público, o tom e o que pode/não pode estão no system prompt (a persona da marca) — SIGA À RISCA.\n` +
@@ -500,6 +542,7 @@ export async function gerarTresCopies(input: {
     `- ${angulo}\n` +
     `\n${instrucoesFormato}\n` +
     nomeDirective +
+    assuntoDirective +
     `\n` +
     (objetivoBloco
       ? `IMPORTANTE: o OBJETIVO acima é a intenção PRINCIPAL — quando objetivo e formato divergirem, o objetivo manda (CTA, tom, estrutura).\n\n`

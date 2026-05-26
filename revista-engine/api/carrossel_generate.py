@@ -1197,7 +1197,7 @@ FORMATO_INSTRUCOES = {
         "- O mito tem que ser uma CRENCA que quase todo mundo ja assumiu como obvia ('o sindico tem obrigacao de resolver, ne?').\n"
         "- A verdade precisa ser ESPECIFICA: 'a regra/lei diz exatamente o oposto' (cite artigo/REsp quando der).\n"
         "FORMULA DA CAPA (siga A RISCA — foi o que viralizou): "
-        "(1) uma CENA concreta do dia a dia que todo mundo ja viveu, curtissima ('Vizinho barulhento as 3h. Voce liga pro sindico.'); "
+        "(1) uma CENA concreta do dia a dia que todo mundo ja viveu, curtissima e ESPECIFICA do assunto escolhido (varie — NAO use sempre vizinho/barulho); "
         "(2) a CRENCA obvia em seguida, com uma CONTRADICAO curta (2 a 3 palavras) entre [[ ]] — ex: '[[obrigacao de resolver]]'; "
         "(3) termine com PERGUNTA BINARIA (sim/nao) — 'ne?', 'certo?'. + tarja FORMATO.\n"
         "ESTRUTURA (arco de UM mito so): capa -> MITO (enuncia a crenca errada) -> O PROBLEMA (consequencia real) -> "
@@ -1307,6 +1307,43 @@ _ESTRUTURA_POR_SLIDES: dict[int, str] = {
     10: "1 Gancho reconhecivel · 2 Contexto/personagem · 3 A crenca · 4 A rachadura · 5 Micro-tensao · 6 A virada (verdade incomoda + ancora) · 7 RESPIRO (tipo 'frase') · 8 O custo / o que fazer · 9 Frase memoravel (manifesto) · 10 CTA de posicionamento",
 }
 
+# Pool de ASSUNTOS de conflito condominial. Um e injetado por geracao como
+# SEMENTE pra evitar que o modelo caia sempre no mesmo (ex: 'vizinho
+# barulhento') quando o tema e generico ('historias de condominio', 'mitos e
+# verdades'). Cada chamada e stateless. Tema especifico continua mandando.
+_ASSUNTOS_CONFLITO = [
+    "cachorro que late o dia inteiro",
+    "fezes de pet nao recolhidas na area comum",
+    "vaga de garagem usada por quem nao devia",
+    "reforma fora do horario permitido",
+    "obra sem autorizacao do condominio",
+    "inadimplencia e o rateio que sobra pros outros",
+    "cobranca de taxa extra polemica",
+    "disputa pelo salao de festas / churrasqueira",
+    "uso da piscina fora das regras",
+    "mudanca no fim de semana / fora de hora",
+    "fumaca de cigarro que invade o ape vizinho",
+    "vazamento entre unidades e quem paga o conserto",
+    "lixo deixado no corredor",
+    "bicicleta ou patinete no elevador social",
+    "cameras e privacidade dos moradores",
+    "aluguel por temporada (Airbnb) no predio",
+    "vaga de visitante sempre ocupada",
+    "brigas no grupo de WhatsApp do condominio",
+    "prestacao de contas questionada na assembleia",
+    "conselho contra o sindico",
+    "troca de administradora",
+    "demissao do zelador antigo",
+    "ar-condicionado ou antena instalado na fachada",
+    "planta que pinga na varanda de baixo",
+    "crianca brincando na garagem ou areas de circulacao",
+    "morador que estaciona em local proibido",
+    "acesso de entregador / delivery na portaria",
+    "festa que varou a madrugada",
+    "animal de grande porte no elevador",
+    "estendimento de roupa na janela / fachada",
+]
+
 
 def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
     """Gera os textos dos slides + legenda Instagram via GPT.
@@ -1321,6 +1358,7 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
     formato = (carrossel.get("formato") or "historia_real").strip()
     briefing = (carrossel.get("briefing") or "").strip()
     objetivo = (carrossel.get("objetivo") or "").strip()
+    assunto_sugerido = random.choice(_ASSUNTOS_CONFLITO)
 
     formato_label = formato.replace("_", " ")
     instrucoes_formato = FORMATO_INSTRUCOES.get(
@@ -1455,6 +1493,7 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"A ASSINATURA '{assinatura}' aparece SO na legenda, nunca nos slides. "
         f"Use a estrutura de slides do FORMATO acima; a voz aqui e o tom de cada slide.\n\n"
         f"REGRAS GERAIS:\n"
+        f"- VARIE O ASSUNTO (regra CRITICA): se o tema/briefing ja aponta um conflito especifico, siga-o. Se o tema for GENERICO ('historias de condominio', 'mitos e verdades', 'polemicas de predio', etc.), escolha um conflito condominial CONCRETO e ESPECIFICO — e NUNCA caia sempre no 'vizinho barulhento'. O universo e enorme: animais, vaga de garagem, obras/reforma, inadimplencia/taxa extra, area comum (salao, piscina, churrasqueira), mudanca fora de hora, cigarro, vazamento entre unidades, lixo no corredor, cameras/privacidade, aluguel por temporada, grupo de WhatsApp, prestacao de contas, conselho x sindico, administradora, zelador, fachada, portaria, etc. Para ESTE post, parta de: {assunto_sugerido} (use como semente — pode adaptar ou trocar por outro, so NAO repita sempre o mesmo assunto).\n"
         f"- Capa: NUNCA escreva o tema '{tema}' como titulo nem o repita literalmente — o tema e so o ASSUNTO que guia o conteudo, nao vira texto do slide. A capa entra DIRETO no gancho. Capa inteira (titulo + body) tem no max 20 palavras.\n"
         f"- HOOK DA CAPA (prioridade maxima): o titulo da capa e a frase que PARA O SCROLL — verdade incomoda, identificacao, tensao ou curiosidade. Curto, leitura instantanea no celular. NUNCA slogan corporativo ou frase que comeca devagar.\n"
         f"- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: 'WhatsApp [[nao e assembleia]].'. So no titulo da capa.\n"
