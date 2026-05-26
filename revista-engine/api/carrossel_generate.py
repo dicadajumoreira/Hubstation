@@ -1194,7 +1194,7 @@ FORMATO_INSTRUCOES = {
     "mito_verdade": (
         "FORMATO: MITO VS VERDADE (mito juridico universalmente vivido — a formula que MAIS viralizou).\n"
         "- FOQUE EM UM UNICO MITO, desenvolvido a fundo. NUNCA varios pares rasos de mito/verdade.\n"
-        "- O mito tem que ser uma CRENCA que quase todo mundo ja assumiu como obvia ('o sindico tem obrigacao de resolver, ne?').\n"
+        "- O mito tem que ser uma CRENCA que quase todo mundo ja assumiu como obvia — pode ser sobre o sindico, um morador, uma regra ou a convivencia (ex: 'o sindico tem obrigacao de resolver, ne?', 'barulho de crianca ninguem pode reclamar', 'se ta na escritura, pode tudo').\n"
         "- A verdade precisa ser ESPECIFICA: 'a regra/lei diz exatamente o oposto' (cite artigo/REsp quando der).\n"
         "FORMULA DA CAPA (siga A RISCA — foi o que viralizou): "
         "(1) uma CENA concreta do dia a dia que todo mundo ja viveu, curtissima e ESPECIFICA do assunto escolhido (varie — NAO use sempre vizinho/barulho); "
@@ -1496,6 +1496,7 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"REGRAS GERAIS:\n"
         f"- TEMA = CATEGORIA, NUNCA ROTEIRO PRONTO: o tema '{tema}' e so a BASE. A CADA novo carrossel, escolha um RECORTE especifico e DIFERENTE dentro do tema, pra que dois posts do mesmo tema nunca saiam iguais. Ex: tema 'barulho' -> barulho de cachorro, de crianca correndo, de salto no piso, de festa, de reforma, de movel arrastado, de TV alta. Evite o recorte mais obvio. Se o tema JA for um recorte especifico, traga uma SITUACAO nova dentro dele.\n"
         f"- SEMENTE DE VARIACAO (use pra fugir do padrao e escolher um recorte menos obvio, diferente do que voce geraria por default): {variacao_seed}. Se o tema estiver vazio ou muito generico ('historias de condominio', 'mitos e verdades', 'polemicas de predio'), puxe pra um conflito condominial concreto como: {assunto_sugerido} (so uma semente — varie a cada post).\n"
+        f"- O CONFLITO NAO PRECISA GIRAR EM TORNO DO SINDICO: pode ser morador x morador, vizinho x vizinho, morador x regra/convivencia, condomino x area comum. O sindico (ou a gestao) entra SO quando a situacao pedir naturalmente — nunca force o sindico como protagonista.\n"
         f"- Capa: NUNCA escreva o tema '{tema}' como titulo nem o repita literalmente — o tema e so o ASSUNTO que guia o conteudo, nao vira texto do slide. A capa entra DIRETO no gancho. Capa inteira (titulo + body) tem no max 20 palavras.\n"
         f"- HOOK DA CAPA (prioridade maxima): o titulo da capa e a frase que PARA O SCROLL — verdade incomoda, identificacao, tensao ou curiosidade. Curto, leitura instantanea no celular. NUNCA slogan corporativo ou frase que comeca devagar.\n"
         f"- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: 'WhatsApp [[nao e assembleia]].'. So no titulo da capa.\n"

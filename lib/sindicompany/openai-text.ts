@@ -38,7 +38,7 @@ const FORMATO_INSTRUCOES: Record<string, string> = {
   mito_verdade:
     `FORMATO: MITO VS VERDADE (mito jurídico universalmente vivido — a fórmula que MAIS viralizou).\n` +
     `- FOQUE EM UM ÚNICO MITO, desenvolvido a fundo. NUNCA vários pares rasos de mito/verdade.\n` +
-    `- O mito tem que ser uma CRENÇA que quase todo mundo já assumiu como óbvia ("o síndico tem obrigação de resolver, né?") — não um mito técnico que ninguém comenta.\n` +
+    `- O mito tem que ser uma CRENÇA que quase todo mundo já assumiu como óbvia — pode ser sobre o síndico, um morador, uma regra ou a convivência (ex: "o síndico tem obrigação de resolver, né?", "barulho de criança ninguém pode reclamar", "se tá na escritura, pode tudo"). Não um mito técnico que ninguém comenta.\n` +
     `- A verdade precisa ser ESPECÍFICA: "a regra/lei diz exatamente o oposto", não "não é bem assim". Cite artigo/REsp quando der.\n` +
     `FÓRMULA DA CAPA (siga À RISCA — é o que viralizou):\n` +
     `  (1) uma CENA concreta do dia a dia que todo mundo já viveu, curtíssima e ESPECÍFICA do assunto escolhido (varie — NÃO use sempre vizinho/barulho);\n` +
@@ -529,7 +529,8 @@ export async function gerarTresCopies(input: {
     const variacaoSeed = Math.random().toString(36).slice(2, 8);
     const assuntoDirective =
       `- TEMA = CATEGORIA, NUNCA ROTEIRO PRONTO: o tema "${input.tema}" é só a BASE. A CADA novo carrossel, escolha um RECORTE específico e DIFERENTE dentro do tema, pra que dois posts do mesmo tema nunca saiam iguais. Ex: tema "barulho" → barulho de cachorro, de criança correndo, de salto no piso, de festa, de reforma, de móvel arrastado, de TV alta. Evite o recorte mais óbvio. Se o tema JÁ for um recorte específico, traga uma SITUAÇÃO nova dentro dele.\n` +
-      `- SEMENTE DE VARIAÇÃO (use pra fugir do padrão e escolher um recorte menos óbvio, diferente do que você geraria por default): ${variacaoSeed}. Se o tema estiver vazio ou muito genérico ("histórias de condomínio", "mitos e verdades", "polêmicas de prédio"), puxe pra um conflito condominial concreto como: ${assuntoSugerido} (só uma semente — varie a cada post).\n`;
+      `- SEMENTE DE VARIAÇÃO (use pra fugir do padrão e escolher um recorte menos óbvio, diferente do que você geraria por default): ${variacaoSeed}. Se o tema estiver vazio ou muito genérico ("histórias de condomínio", "mitos e verdades", "polêmicas de prédio"), puxe pra um conflito condominial concreto como: ${assuntoSugerido} (só uma semente — varie a cada post).\n` +
+      `- O CONFLITO NÃO PRECISA GIRAR EM TORNO DO SÍNDICO: pode ser morador × morador, vizinho × vizinho, morador × regra/convivência, condômino × área comum. O síndico (ou a gestão) entra SÓ quando a situação pedir naturalmente — nunca force o síndico como protagonista.\n`;
     return (
     `Crie UMA versão de copy pra um carrossel do ${handle}.\n` +
     `A VOZ, o público, o tom e o que pode/não pode estão no system prompt (a persona da marca) — SIGA À RISCA.\n` +
