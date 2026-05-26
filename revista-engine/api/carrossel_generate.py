@@ -1187,13 +1187,19 @@ FORMATO_INSTRUCOES = {
         "ultimo CTA 'Qual voce nao sabia? Comenta o numero aqui'."
     ),
     "mito_verdade": (
-        "FORMATO: MITO VS VERDADE (crencas erradas difundidas).\n"
-        "- Sempre em PARES: Mito num slide, Verdade no seguinte.\n"
-        "- O mito precisa SOAR RAZOAVEL. A verdade precisa ser ESPECIFICA (cite artigo/REsp).\n"
-        "- MAXIMO 3 pares.\n"
-        "ESTRUTURA: 1(capa) 'Voce acredita em algum desses mitos sobre condominio?'. "
-        "2,3 Mito1->Verdade1. 4,5 Mito2->Verdade2. tipo dos slides: 'mito' / 'verdade'. "
-        "ultimo CTA 'Qual mito voce acreditava? Comenta aqui'."
+        "FORMATO: MITO VS VERDADE (mito juridico universalmente vivido — a formula que MAIS viralizou).\n"
+        "- FOQUE EM UM UNICO MITO, desenvolvido a fundo. NUNCA varios pares rasos de mito/verdade.\n"
+        "- O mito tem que ser uma CRENCA que quase todo mundo ja assumiu como obvia ('o sindico tem obrigacao de resolver, ne?').\n"
+        "- A verdade precisa ser ESPECIFICA: 'a regra/lei diz exatamente o oposto' (cite artigo/REsp quando der).\n"
+        "FORMULA DA CAPA (siga A RISCA — foi o que viralizou): "
+        "(1) uma CENA concreta do dia a dia que todo mundo ja viveu, curtissima ('Vizinho barulhento as 3h. Voce liga pro sindico.'); "
+        "(2) a CRENCA obvia em seguida, com uma CONTRADICAO curta (2 a 3 palavras) entre [[ ]] — ex: '[[obrigacao de resolver]]'; "
+        "(3) termine com PERGUNTA BINARIA (sim/nao) — 'ne?', 'certo?'. + tarja FORMATO.\n"
+        "ESTRUTURA (arco de UM mito so): capa -> MITO (enuncia a crenca errada) -> O PROBLEMA (consequencia real) -> "
+        "VERDADE (o que a regra realmente diz, especifico) -> O QUE FAZER (passos praticos, lista numerada) -> CTA. "
+        "tipo dos slides: 'mito' / 'verdade'. "
+        "CTA (ultimo): frase de CONTRADICAO memoravel ('Sindico bom nao resolve tudo. Ele resolve o que e dele resolver.') + "
+        "PERGUNTA BINARIA, terminando com '[[Comenta SIM ou NAO]]'."
     ),
     "antes_depois": (
         "FORMATO: ANTES / DEPOIS (resultado tangivel de gestao profissional).\n"
