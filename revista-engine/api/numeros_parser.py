@@ -208,6 +208,46 @@ def _pdf_para_imagens(pdf_path: Path, dest_dir: Path, max_pages: int = 3) -> lis
 # Pipeline
 # =============================================================================
 
+def _render_html_dashboard(html_path: Path, dest: Path) -> Path | None:
+    """Renderiza o dashboard HTML com JS executando (os KPIs sao preenchidos
+    por script — strip de texto so pega 'Carregando...'). Esconde a barra
+    lateral (Visao Geral, conteudo principal) e captura PNG pra parse por
+    visao. None se o Playwright falhar."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as e:  # noqa: BLE001
+        print(f"[numeros] playwright indisponivel: {e}", flush=True)
+        return None
+    out = dest / "dashboard.png"
+    hide_sidebar = (
+        "#sb{display:none!important}"
+        "#mn{margin-left:0!important;padding:18px!important}"
+    )
+    try:
+        with sync_playwright() as p:
+            b = p.chromium.launch(args=["--no-sandbox"])
+            pg = b.new_page(
+                viewport={"width": 1200, "height": 1400}, device_scale_factor=2
+            )
+            try:
+                pg.goto(html_path.as_uri(), wait_until="networkidle", timeout=30000)
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                pg.add_style_tag(content=hide_sidebar)
+            except Exception:  # noqa: BLE001
+                pass
+            pg.wait_for_timeout(2500)  # JS popula KPIs + Chart.js renderiza
+            el = pg.query_selector("#mn") or pg.query_selector("body")
+            el.screenshot(path=str(out))
+            b.close()
+        print(f"[numeros] dashboard HTML renderizado -> {out.name}", flush=True)
+        return out
+    except Exception as e:  # noqa: BLE001
+        print(f"[numeros] render do dashboard falhou: {type(e).__name__}: {e}", flush=True)
+        return None
+
+
 def _processar_arquivos(achados: dict[str, list[Path]], dest: Path) -> dict[str, Any] | None:
     """Dado {htmls, imagens, pdfs} em ordem de prioridade, extrai KPIs."""
     imagens = list(achados.get("imagens") or [])
@@ -230,13 +270,27 @@ def _processar_arquivos(achados: dict[str, list[Path]], dest: Path) -> dict[str,
         )
 
     if htmls:
+        # Dashboards modernos preenchem os numeros via JS (o HTML estatico so
+        # tem "Carregando..."). Renderiza com JS executando e parseia a imagem
+        # por VISAO. Fallback: strip->texto, se o render falhar.
+        img = _render_html_dashboard(htmls[0], dest)
+        if img:
+            print("[numeros] processando dashboard HTML via Vision", flush=True)
+            res = _gerar_json_vision(
+                _PROMPT_INSTRUCAO,
+                [str(img)],
+                _FALLBACK,
+                expected_keys=["kpis"],
+            )
+            if res and res.get("kpis"):
+                return res
         try:
             raw_html = htmls[0].read_text(encoding="utf-8", errors="replace")
         except Exception as e:  # noqa: BLE001
             print(f"[numeros] erro lendo {htmls[0].name}: {e}", flush=True)
             return None
         snippet = _strip_html(raw_html)
-        print(f"[numeros] HTML reduzido para {len(snippet)} chars", flush=True)
+        print(f"[numeros] HTML reduzido para {len(snippet)} chars (fallback texto)", flush=True)
         prompt = _PROMPT_INSTRUCAO + "\nHTML:\n" + snippet
         return _gerar_json(prompt, _FALLBACK, expected_keys=["kpis"])
 
