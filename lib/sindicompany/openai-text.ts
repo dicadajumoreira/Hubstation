@@ -12,18 +12,18 @@ const OPENAI_API = "https://api.openai.com/v1/chat/completions";
  *  formato escolhido é injetado no prompt — mantém o prompt enxuto. */
 const FORMATO_INSTRUCOES: Record<string, string> = {
   historia_real:
-    `FORMATO: HISTÓRIA REAL (o que mais engaja e salva).\n` +
-    `- Dê um NOME PRÓPRIO ao personagem (use o nome indicado abaixo no briefing), nunca "um morador".\n` +
-    `- Detalhes concretos tornam crível: "6 kg", "4 horas", "23%". NUNCA cite número de apartamento/unidade.\n` +
-    `- A história tem virada: setup → conflito → descoberta → resolução.\n` +
+    `FORMATO: HISTÓRIA REAL (a fórmula que mais engaja — 2º maior viral da conta).\n` +
+    `- Dê um NOME PRÓPRIO ao personagem (use o nome indicado abaixo no briefing), nunca "um morador". Detalhes concretos tornam crível: "10 anos", "23%", "12 a 8". NUNCA cite número de apartamento/unidade nem nome de condomínio.\n` +
+    `- CONFLITO MORAL (o coração do post): NÃO pode ter vilão óbvio. Coloque DUAS coisas legítimas em tensão — ex: o síndico querido e dedicado X o condomínio que precisava de gestão dura. Deixe explícito que "são coisas diferentes".\n` +
+    `- FINAL AMBÍGUO: mostre o CUSTO HUMANO junto do resultado. Os números melhoraram, MAS algo se perdeu (relações, amizades, quem não se cumprimenta mais) — ninguém "venceu" limpo. É a ambiguidade que gera o debate.\n` +
     `- Personagens/situações podem ser compostos. NUNCA cite nome de condomínio (real ou inventado), endereço, nem número de unidade/apartamento.\n` +
-    `ESTRUTURA DE SLIDES:\n` +
-    `  1 (capa): hook — o momento de tensão máxima, sem resolver. + tarja FORMATO.\n` +
-    `  2: quem é o personagem e qual o problema.\n` +
-    `  3: o erro que quase aconteceu (ou aconteceu).\n` +
-    `  4: a virada — o que descobriu/aprendeu/fez.\n` +
-    `  5: o resultado concreto (com número).\n` +
-    `  último: CTA "Você já passou por isso? Comenta SIM ou NÃO".`,
+    `ESTRUTURA DE SLIDES (arco da história):\n` +
+    `  1 (capa): personagem + o evento dramático, sem resolver ("Ele foi síndico por 10 anos. Votaram pra tirar ele. 12 a 8."). + tarja FORMATO (ex: HISTÓRIA REAL · DEBATE NOS COMENTÁRIOS).\n` +
+    `  2: A SITUAÇÃO — quem é o personagem (humano, querido) e a tensão que já existia por baixo.\n` +
+    `  3: O QUE NINGUÉM FALAVA — o problema real/oculto; o conflito moral aflora ("ser querido" ≠ "saber gerir").\n` +
+    `  4: A DECISÃO/VIRADA — o que aconteceu e o FINAL AMBÍGUO (o que se ganhou E o que doeu).\n` +
+    `  5: O RESULTADO — números concretos depois (ex: "de 23% pra 4%"), em lista numerada quando couber.\n` +
+    `  último (CTA): PERGUNTA DE POSICIONAMENTO que OBRIGA a escolher um lado ("Você teria votado com os 12 ou com os 8?"). Termine com a chamada "[[Comenta 12 ou 8]]" e UMA linha curta legendando cada lado ("12 = síndico profissional · 8 = ficava com o Carlos").`,
   lista:
     `FORMATO: LISTA (educativo, pontos equivalentes).\n` +
     `- MÁXIMO 5 itens. Cada item cabe em UMA linha — se não couber, está longo demais.\n` +

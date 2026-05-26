@@ -1167,15 +1167,19 @@ def _upload_slides_zip(
 # eh injetado no prompt.
 FORMATO_INSTRUCOES = {
     "historia_real": (
-        "FORMATO: HISTORIA REAL (o que mais engaja e salva).\n"
-        "- De um NOME PROPRIO brasileiro ao personagem, variando a cada roteiro (nunca use sempre o mesmo nome), nunca 'um morador'.\n"
-        "- Detalhes concretos: '6 kg', '4 horas', '23%'. NUNCA cite numero de apartamento/unidade.\n"
-        "- A historia tem virada: setup -> conflito -> descoberta -> resolucao.\n"
+        "FORMATO: HISTORIA REAL (a formula que mais engaja — 2o maior viral da conta).\n"
+        "- De um NOME PROPRIO brasileiro ao personagem, variando a cada roteiro (nunca use sempre o mesmo nome), nunca 'um morador'. Detalhes concretos: '10 anos', '23%', '12 a 8'. NUNCA cite numero de apartamento/unidade nem nome de condominio.\n"
+        "- CONFLITO MORAL (o coracao do post): NAO pode ter vilao obvio. Coloque DUAS coisas legitimas em tensao — ex: o sindico querido e dedicado X o condominio que precisava de gestao dura. Deixe explicito que 'sao coisas diferentes'.\n"
+        "- FINAL AMBIGUO: mostre o CUSTO HUMANO junto do resultado. Os numeros melhoraram, MAS algo se perdeu (relacoes, amizades, quem nao se cumprimenta mais) — ninguem 'venceu' limpo. A ambiguidade e o que gera o debate.\n"
         "- Personagens/situacoes podem ser compostos. NUNCA cite nome de condominio (real ou inventado), endereco, nem numero de unidade/apartamento.\n"
-        "ESTRUTURA: 1(capa) hook no momento de tensao maxima, sem resolver. "
-        "2 quem e o personagem e o problema. 3 o erro que quase aconteceu. "
-        "4 a virada. 5 o resultado concreto com numero. "
-        "ultimo CTA 'Voce ja passou por isso? Comenta SIM ou NAO'."
+        "ESTRUTURA (arco da historia): "
+        "1(capa) personagem + evento dramatico, sem resolver ('Ele foi sindico por 10 anos. Votaram pra tirar ele. 12 a 8.') + tarja FORMATO. "
+        "2 A SITUACAO: quem e o personagem (humano, querido) e a tensao por baixo. "
+        "3 O QUE NINGUEM FALAVA: o problema oculto; o conflito moral aflora ('ser querido' != 'saber gerir'). "
+        "4 A DECISAO/VIRADA: o que aconteceu e o FINAL AMBIGUO (o que ganhou E o que doeu). "
+        "5 O RESULTADO: numeros concretos depois (ex: 'de 23% pra 4%'), em lista quando couber. "
+        "ultimo (CTA) PERGUNTA DE POSICIONAMENTO que OBRIGA a escolher um lado ('Voce teria votado com os 12 ou com os 8?'), "
+        "terminando com '[[Comenta 12 ou 8]]' + uma linha curta legendando cada lado ('12 = sindico profissional · 8 = ficava com o Carlos')."
     ),
     "lista": (
         "FORMATO: LISTA (educativo, pontos equivalentes).\n"
