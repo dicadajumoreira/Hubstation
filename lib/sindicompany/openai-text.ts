@@ -526,8 +526,10 @@ export async function gerarTresCopies(input: {
         : "";
     const assuntoSugerido =
       ASSUNTOS_CONFLITO[Math.floor(Math.random() * ASSUNTOS_CONFLITO.length)];
+    const variacaoSeed = Math.random().toString(36).slice(2, 8);
     const assuntoDirective =
-      `- VARIE O ASSUNTO (regra CRÍTICA): se o tema/briefing já aponta um conflito específico, siga-o. Se o tema for GENÉRICO ("histórias de condomínio", "mitos e verdades", "polêmicas de prédio", etc.), escolha um conflito condominial CONCRETO e ESPECÍFICO — e NUNCA caia sempre no "vizinho barulhento". O universo é enorme: animais, vaga de garagem, obras/reforma, inadimplência/taxa extra, área comum (salão, piscina, churrasqueira), mudança fora de hora, cigarro, vazamento entre unidades, lixo no corredor, câmeras/privacidade, aluguel por temporada, grupo de WhatsApp, prestação de contas, conselho x síndico, administradora, zelador, fachada, portaria, etc. Para ESTE post, parta de: ${assuntoSugerido} (use como semente — pode adaptar ou trocar por outro do universo, só NÃO repita sempre o mesmo assunto).\n`;
+      `- TEMA = CATEGORIA, NUNCA ROTEIRO PRONTO: o tema "${input.tema}" é só a BASE. A CADA novo carrossel, escolha um RECORTE específico e DIFERENTE dentro do tema, pra que dois posts do mesmo tema nunca saiam iguais. Ex: tema "barulho" → barulho de cachorro, de criança correndo, de salto no piso, de festa, de reforma, de móvel arrastado, de TV alta. Evite o recorte mais óbvio. Se o tema JÁ for um recorte específico, traga uma SITUAÇÃO nova dentro dele.\n` +
+      `- SEMENTE DE VARIAÇÃO (use pra fugir do padrão e escolher um recorte menos óbvio, diferente do que você geraria por default): ${variacaoSeed}. Se o tema estiver vazio ou muito genérico ("histórias de condomínio", "mitos e verdades", "polêmicas de prédio"), puxe pra um conflito condominial concreto como: ${assuntoSugerido} (só uma semente — varie a cada post).\n`;
     return (
     `Crie UMA versão de copy pra um carrossel do ${handle}.\n` +
     `A VOZ, o público, o tom e o que pode/não pode estão no system prompt (a persona da marca) — SIGA À RISCA.\n` +
