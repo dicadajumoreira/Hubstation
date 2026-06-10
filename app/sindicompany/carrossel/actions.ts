@@ -124,7 +124,16 @@ export async function iniciarCarrosselAction(formData: FormData): Promise<void> 
     "educar",
   ];
   const objetivo = objetivosValidos.includes(objetivoRaw) ? objetivoRaw : "";
-  const titulo = getStr(formData, "titulo");
+  // 'data_postagem' substituiu o antigo 'titulo' no form. O titulo
+  // continua existindo na tabela (usado no AI prompt, fallback de capa,
+  // ZIPs, listagem) e e auto-derivado da data como "Postagem DD/MM/YYYY".
+  // HTML <input type="date"> ja garante o formato ISO YYYY-MM-DD.
+  const data_postagem = getStr(formData, "data_postagem");
+  const tituloDerivado = (() => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(data_postagem);
+    return m ? `Postagem ${m[3]}/${m[2]}/${m[1]}` : "";
+  })();
+  const titulo = tituloDerivado;
   const temaSelecionado = getStr(formData, "tema");
   const temaOutro = getStr(formData, "tema_outro");
   // 'Outro'/'Outros' eh um marcador da UI — substitui pelo texto livre
@@ -144,7 +153,7 @@ export async function iniciarCarrosselAction(formData: FormData): Promise<void> 
     ? coverArchetypeRaw
     : undefined;
 
-  if (!titulo) backTo("/sindicompany/carrossel/novo", "Informe o título do carrossel.", formData);
+  if (!titulo) backTo("/sindicompany/carrossel/novo", "Informe a data de postagem.", formData);
   if (!objetivo) {
     backTo("/sindicompany/carrossel/novo", "Selecione o objetivo do carrossel.", formData);
   }
@@ -162,6 +171,7 @@ export async function iniciarCarrosselAction(formData: FormData): Promise<void> 
     brand,
     objetivo: objetivo || undefined,
     titulo,
+    data_postagem: data_postagem || undefined,
     tema,
     formato,
     briefing: briefing || undefined,

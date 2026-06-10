@@ -132,7 +132,7 @@ export default async function CarrosseisPage() {
                     Marca
                   </th>
                   <th className="text-left font-semibold text-onix-900 px-5 py-3">
-                    Título
+                    Postagem
                   </th>
                   <th className="text-left font-semibold text-onix-900 px-5 py-3">
                     Tema
