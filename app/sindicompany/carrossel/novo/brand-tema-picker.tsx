@@ -66,6 +66,12 @@ export function BrandTemaPicker({
     : marcas[0]?.slug ?? "";
   const [brand, setBrand] = useState(initialBrand);
   const temas = marcas.find((m) => m.slug === brand)?.temas ?? [];
+  // Ordem alfabetica (pt-BR, ignora acento/caixa) e remove qualquer
+  // 'Outro'/'Outros' vindo do DB pra nao duplicar a opcao fixa de tema
+  // livre, que sempre fica por ultimo.
+  const temasOrdenados = [...temas]
+    .filter((t) => t !== "Outro" && t !== "Outros")
+    .sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
   const [objetivo, setObjetivo] = useState(defaultObjetivo);
   const [tema, setTema] = useState(
     temas.includes(defaultTema) ? defaultTema : "",
@@ -158,7 +164,7 @@ export function BrandTemaPicker({
           className={inputCls}
         >
           <option value="">— Selecione —</option>
-          {temas.map((t) => (
+          {temasOrdenados.map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
