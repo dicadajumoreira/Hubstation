@@ -223,6 +223,7 @@ export interface Carrossel {
   brand: CarrosselBrand;
   objetivo: string | null;
   titulo: string;
+  data_postagem: string | null;
   tema: string | null;
   formato: string | null;
   briefing: string | null;
@@ -246,6 +247,7 @@ export interface CarrosselInput {
   brand?: CarrosselBrand;
   objetivo?: string;
   titulo: string;
+  data_postagem?: string;
   tema?: string;
   formato?: string;
   briefing?: string;
