@@ -75,7 +75,7 @@ export function BrandTemaPicker({
   function onBrandChange(slug: string) {
     setBrand(slug);
     const novaLista = marcas.find((m) => m.slug === slug)?.temas ?? [];
-    if (!novaLista.includes(tema)) setTema("");
+    if (tema !== "Outro" && !novaLista.includes(tema)) setTema("");
   }
 
   return (
@@ -163,6 +163,7 @@ export function BrandTemaPicker({
               {t}
             </option>
           ))}
+          <option value="Outro">Outro (tema livre)</option>
         </select>
         {isOutro && (
           <input
