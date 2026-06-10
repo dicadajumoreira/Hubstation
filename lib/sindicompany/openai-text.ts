@@ -531,10 +531,15 @@ export async function gerarTresCopies(input: {
       `- TEMA = CATEGORIA, NUNCA ROTEIRO PRONTO: o tema "${input.tema}" é só a BASE. A CADA novo carrossel, escolha um RECORTE específico e DIFERENTE dentro do tema, pra que dois posts do mesmo tema nunca saiam iguais. Ex: tema "barulho" → barulho de cachorro, de criança correndo, de salto no piso, de festa, de reforma, de móvel arrastado, de TV alta. Evite o recorte mais óbvio. Se o tema JÁ for um recorte específico, traga uma SITUAÇÃO nova dentro dele.\n` +
       `- SEMENTE DE VARIAÇÃO (use pra fugir do padrão e escolher um recorte menos óbvio, diferente do que você geraria por default): ${variacaoSeed}. Se o tema estiver vazio ou muito genérico ("histórias de condomínio", "mitos e verdades", "polêmicas de prédio"), puxe pra um conflito condominial concreto como: ${assuntoSugerido} (só uma semente — varie a cada post).\n` +
       `- O CONFLITO NÃO PRECISA GIRAR EM TORNO DO SÍNDICO: pode ser morador × morador, vizinho × vizinho, morador × regra/convivência, condômino × área comum. O síndico (ou a gestão) entra SÓ quando a situação pedir naturalmente — nunca force o síndico como protagonista.\n`;
+    const audienciaDirective =
+      brand === "sindicompanybr"
+        ? `- AUDIÊNCIA (regra CRÍTICA, vale pra TODA copy de @sindicompanybr): VOCÊ FALA COM O MORADOR COMUM de condomínio — não com o síndico, não com o administrador, não com o profissional. O leitor é a pessoa que MORA num apê: paga taxa, convive com vizinhos, vai (ou foge) de assembleia, tem dúvidas práticas do dia a dia. Use "você" pra o morador. Quando precisar mencionar o síndico, é em 3a pessoa ("o síndico do seu prédio", "ele/ela"). NUNCA dirija a copy a "você síndico". Linguagem acessível, sem juridiquês, sem jargão de gestão. Quando explicar algo (fundo de reserva, convenção, assembleia, regimento), explica como se contasse pra um amigo no elevador — não como manual técnico. Toda CTA, exemplo, dor e identificação vem da ótica de quem MORA, não de quem GERE.\n`
+        : "";
     return (
     `Crie UMA versão de copy pra um carrossel do ${handle}.\n` +
     `A VOZ, o público, o tom e o que pode/não pode estão no system prompt (a persona da marca) — SIGA À RISCA.\n` +
     `UNIVERSO DA MARCA (REGRA INEGOCIÁVEL): TODO o conteúdo é sobre o nicho de ${marca?.nome ?? handle}${marca?.nicho ? ` — ${marca.nicho}` : ""}. Trate o tema "${input.tema}" SEMPRE pela ótica e realidade dessa marca. Os exemplos que aparecem neste prompt (síndico, assembleia, condomínio, morador, gestão condominial, etc.) são de OUTRO nicho e servem APENAS pra ilustrar a TÉCNICA — NUNCA copie o assunto deles. NUNCA escreva sobre gestão condominial/síndico/assembleia a menos que a persona desta marca diga explicitamente que ela é desse nicho.\n` +
+    audienciaDirective +
     objetivoBloco +
     `\nBRIEFING:\n` +
     `- Título interno: ${input.titulo}\n` +
