@@ -240,7 +240,7 @@ export default async function CarrosselDetailPage({
             workflow pode ter falhado durante o upload dos slides. Confira os
             logs em{" "}
             <a
-              href="https://github.com/dicadajumoreira/Sindicompany.info/actions/workflows/generate-carrossel.yml"
+              href="https://github.com/dicadajumoreira/Hubstation/actions/workflows/generate-carrossel.yml"
               target="_blank"
               rel="noopener noreferrer"
               className="underline font-medium"
