@@ -14,6 +14,7 @@ import {
 } from "@/lib/sindicompany/condominios-db";
 import { DashboardShell } from "../../shell";
 import { ComunicadoArt } from "../comunicado-art";
+import { RichTextEditor } from "../rich-text-editor";
 import { DownloadButtons } from "./download-buttons";
 import {
   excluirComunicadoAction,
@@ -136,8 +137,8 @@ export default async function ComunicadoPage({
               </div>
               <div>
                 <label className="block text-sm font-medium text-onix-900 mb-1">Texto do comunicado</label>
-                <textarea name="corpo" defaultValue={c.corpo} rows={12} className="w-full rounded-lg border border-onix-200 px-3 py-2 text-sm font-mono" />
-                <p className="text-[11px] text-g60 mt-1">Cerca de 150–190 palavras / 4-5 parágrafos curtos cabem bem no Story (1080×1920) e no A4. Acima disso pode cortar na arte.</p>
+                <RichTextEditor name="corpo" defaultValue={c.corpo} minHeight={280} />
+                <p className="text-[11px] text-g60 mt-1">Selecione um trecho e clique em <strong>B</strong>, <em>I</em> ou <u>U</u> pra formatar. ~150–190 palavras / 4-5 parágrafos curtos cabem bem no Story e no A4.</p>
               </div>
               <button type="submit" className="inline-flex items-center px-5 py-2.5 rounded-lg bg-onix-900 text-white font-medium hover:bg-onix-800 text-sm">Salvar</button>
             </form>

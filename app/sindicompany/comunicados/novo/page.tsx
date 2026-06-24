@@ -6,6 +6,7 @@ import { CONDOMINIOS } from "@/lib/sindicompany/condominios";
 import { listCondoMetas } from "@/lib/sindicompany/condominios-db";
 import { DashboardShell } from "../../shell";
 import { criarComunicadoAction } from "../actions";
+import { RichTextEditor } from "../rich-text-editor";
 
 export default async function NovoComunicadoPage({
   searchParams,
@@ -62,8 +63,8 @@ export default async function NovoComunicadoPage({
           </div>
           <div>
             <label className="block text-sm font-medium text-onix-900 mb-1">Texto do comunicado <span className="text-g60 font-normal">(opcional — pode gerar com IA depois)</span></label>
-            <textarea name="corpo" rows={8} placeholder={"Prezados moradores,\n\n…"} className="w-full rounded-lg border border-onix-200 px-3 py-2 text-sm" />
-            <p className="text-[11px] text-g60 mt-1">Dica: mantenha em torno de 150–190 palavras / 4-5 parágrafos curtos pra caber tanto no Story quanto no A4. (A IA já gera nesse tamanho.)</p>
+            <RichTextEditor name="corpo" placeholder="Prezados moradores, …" minHeight={220} />
+            <p className="text-[11px] text-g60 mt-1">Selecione um trecho e clique em <strong>B</strong>, <em>I</em> ou <u>U</u> pra formatar. Dica: ~150–190 palavras / 4-5 parágrafos curtos cabem tanto no Story quanto no A4.</p>
           </div>
           <button type="submit" className="inline-flex items-center px-5 py-2.5 rounded-lg bg-onix-900 text-white font-medium hover:bg-onix-800 text-sm">
             Criar comunicado

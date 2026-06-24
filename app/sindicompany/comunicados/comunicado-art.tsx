@@ -78,7 +78,28 @@ export function ComunicadoArt(props: ComunicadoArtProps) {
   const d = DIMS[props.variant];
   const { mm15, mm8, mm4, w, h } = d;
   // Nunca exibir travessao no texto, venha de onde vier.
-  const corpo = (props.corpo || "").replace(/\r\n/g, "\n").replace(/\s*[‐‑‒–—―]\s*/g, ", ").trimEnd();
+  const corpoRaw = (props.corpo || "").replace(/\r\n/g, "\n").replace(/\s*[‐‑‒–—―]\s*/g, ", ").trimEnd();
+  // Comunicados antigos: texto puro com '\n' separando paragrafos.
+  // Comunicados novos: HTML simples vindo do RichTextEditor (<p>, <br>,
+  // <strong>, <em>, <u>). Detecta por presenca de qualquer tag.
+  const corpoIsHtml = /<\w+/.test(corpoRaw);
+  // Pra HTML, removemos a margem default do <p> (a primeira linha nao
+  // deve ter espaco acima) e mantemos paragrafos com gap consistente.
+  const corpoHtmlPreparado = corpoIsHtml
+    ? corpoRaw
+    : // Converte texto plano em HTML basico (paragrafos por linha em branco,
+      // <br> dentro do paragrafo) pra a renderizacao usar SO o caminho HTML
+      // e o auto-fit ficar consistente.
+      `<p>${corpoRaw
+        .split(/\n{2,}/)
+        .map((p) =>
+          p
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\n/g, "<br>"),
+        )
+        .join("</p><p>")}</p>`;
 
   const temIlustracao = !!props.ilustracaoUrl;
   const usableW = w - 2 * mm15;
@@ -265,8 +286,33 @@ export function ComunicadoArt(props: ComunicadoArtProps) {
         {props.subtitulo && (
           <div style={{ color: MINT_DARK, fontWeight: 700, fontSize: d.sub, lineHeight: 1.15, marginTop: mm4 * 0.5, marginRight: tituloMarginRight }}>{props.subtitulo}</div>
         )}
-        <div style={{ marginTop: bodyMarginTop, fontSize: fittedBody, lineHeight: 1.55, color: INK, textAlign: "justify", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-          {corpo ? corpo : <span style={{ color: "#9ca3af" }}>(sem texto)</span>}
+        <div
+          // dangerouslySetInnerHTML eh seguro aqui: o conteudo passa pela
+          // sanitizacao no servidor (lib/sindicompany/comunicados.ts) que
+          // mantem so a whitelist <p>, <br>, <strong>, <em>, <u>.
+          // Reset de margins do <p> e gap entre paragrafos via CSS inline
+          // do container — o auto-fit mede o scrollHeight do container, que
+          // continua funcionando com elementos block dentro.
+          style={{
+            marginTop: bodyMarginTop,
+            fontSize: fittedBody,
+            lineHeight: 1.55,
+            color: INK,
+            textAlign: "justify",
+            wordBreak: "break-word",
+          }}
+        >
+          {corpoRaw ? (
+            <div
+              dangerouslySetInnerHTML={{ __html: corpoHtmlPreparado }}
+              // Zera margins padrao do <p> (variam entre browsers e
+              // dao espacos diferentes no preview x no html-to-image),
+              // e adiciona gap controlado entre paragrafos.
+              className="[&_p]:m-0 [&_p:not(:last-child)]:mb-[0.6em]"
+            />
+          ) : (
+            <span style={{ color: "#9ca3af" }}>(sem texto)</span>
+          )}
         </div>
       </div>
 
