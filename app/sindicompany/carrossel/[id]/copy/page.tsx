@@ -15,6 +15,28 @@ export const revalidate = 0;
 
 const ANGULOS = ["Emocional", "Informativa", "Provocativa"];
 
+// Mostra ao editor o que vira destaque visual: [[..]] = grifo, ~~..~~ =
+// sublinhado (tensao). Remove os marcadores do texto exibido.
+function renderHook(text: string) {
+  return text.split(/(\[\[.+?\]\]|~~.+?~~)/g).map((part, i) => {
+    const hl = part.match(/^\[\[(.+?)\]\]$/);
+    if (hl)
+      return (
+        <mark key={i} className="bg-mint-200 text-onix-900 rounded px-0.5">
+          {hl[1]}
+        </mark>
+      );
+    const tn = part.match(/^~~(.+?)~~$/);
+    if (tn)
+      return (
+        <span key={i} className="underline decoration-2 underline-offset-2">
+          {tn[1]}
+        </span>
+      );
+    return part;
+  });
+}
+
 export default async function EscolherCopyPage({
   params,
 }: {
@@ -131,7 +153,7 @@ function CopyCard({
                 </div>
                 {s.titulo && (
                   <div className="text-sm font-semibold text-onix-900 leading-snug">
-                    {s.titulo}
+                    {renderHook(s.titulo)}
                   </div>
                 )}
                 {s.body && (

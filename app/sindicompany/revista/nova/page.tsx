@@ -83,11 +83,38 @@ export default async function NovaEdicaoPage({
   const temaGestor = editorial?.carta_gestor_tema ?? sugCartaGestor?.tema ?? "";
   const editorialSlug = formatMesAno(defaultMes, defaultAno);
 
+  // Campos de CONTEÚDO DO MÊS — NÃO copiam ao duplicar (cada edição tem os
+  // seus). Duplicar reaproveita só identidade/liderança (condomínio, síndico,
+  // gestor). Sem isso, advertências/multas, números, eventos, matéria de capa
+  // e cartas da edição anterior vazavam pra nova.
+  const NAO_COPIAR_DA_FONTE = new Set<string>([
+    "drive_manutencao_url",
+    "manutencao_zip_url",
+    "manutencao_capa_url",
+    "drive_prestacao_url",
+    "prestacao_arquivo_url",
+    "tem_advertencias",
+    "multas_advertencias_obs",
+    "tem_eventos",
+    "drive_eventos_url",
+    "eventos_zip_url",
+    "materia_capa_titulo",
+    "materia_capa_subtitulo",
+    "foto_capa_url",
+    "receita_sugerida",
+    "receita_titulo",
+    "notas_editor",
+    "carta_sindico_tema",
+    "carta_sindico_texto",
+    "carta_gestor_tema",
+    "carta_gestor_texto",
+  ]);
+
   // URL → fonte (quando duplicando) → fallback. Booleans viram "on"/"".
   const v = (k: string, fallback = "") => {
     const fromUrl = getStr(sp, k);
     if (fromUrl) return fromUrl;
-    if (fonte) {
+    if (fonte && !NAO_COPIAR_DA_FONTE.has(k)) {
       const val = (fonte as unknown as Record<string, unknown>)[k];
       if (typeof val === "string" && val) return val;
       if (typeof val === "boolean") return val ? "on" : "";
@@ -371,7 +398,7 @@ export default async function NovaEdicaoPage({
             <DirectUploadField
               kind="manutencao_zip"
               hiddenInputName="manutencao_zip_url_uploaded"
-              initialUrl={fonte?.manutencao_zip_url ?? undefined}
+              initialUrl={undefined}
               accept=".zip,application/zip,application/x-zip-compressed"
               maxBytes={500 * 1024 * 1024}
             />
@@ -382,19 +409,19 @@ export default async function NovaEdicaoPage({
             <DirectUploadField
               kind="manutencao_capa"
               hiddenInputName="manutencao_capa_url_uploaded"
-              initialUrl={fonte?.manutencao_capa_url ?? undefined}
+              initialUrl={undefined}
               accept="image/jpeg,image/png,image/webp"
               maxBytes={20 * 1024 * 1024}
             />
           </Field>
 
-          <Field label="Dashboard de prestação (imagem ou PDF)"
-                 hint="Print do dashboard ou PDF do balancete deste mês. A IA lê e preenche 'Nossos Números'. Upload direto pro Storage.">
+          <Field label="Dashboard de prestação (imagem, PDF ou HTML)"
+                 hint="Print/PDF do balancete OU o dashboard em HTML. A IA lê e preenche 'Nossos Números' com cards. Upload direto pro Storage.">
             <DirectUploadField
               kind="prestacao"
               hiddenInputName="prestacao_arquivo_url_uploaded"
-              initialUrl={fonte?.prestacao_arquivo_url ?? undefined}
-              accept="image/jpeg,image/png,image/webp,application/pdf"
+              initialUrl={undefined}
+              accept="image/jpeg,image/png,image/webp,application/pdf,text/html,.html"
               maxBytes={50 * 1024 * 1024}
             />
           </Field>
@@ -438,7 +465,7 @@ export default async function NovaEdicaoPage({
             <DirectUploadField
               kind="eventos_zip"
               hiddenInputName="eventos_zip_url_uploaded"
-              initialUrl={fonte?.eventos_zip_url ?? undefined}
+              initialUrl={undefined}
               accept=".zip,application/zip,application/x-zip-compressed"
               maxBytes={500 * 1024 * 1024}
             />

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { deleteLeafAsset } from "./asset-upload-action";
 
 const BUCKET = "condominios-fotos";
 
@@ -73,30 +74,77 @@ export function ByAssetSlot({
     }
   }
 
+  async function handleDelete() {
+    if (!url) return;
+    if (!window.confirm(`Excluir ${label} ${slot}? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+    setErrorMsg("");
+    setStatus("uploading");
+    const res = await deleteLeafAsset(url);
+    if (!res.ok) {
+      setStatus("error");
+      setErrorMsg(res.error);
+      return;
+    }
+    setUrl("");
+    setStatus("idle");
+  }
+
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-onix-100 bg-white p-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-wider text-mint-700">
           {label} {slot}
         </span>
-        {status === "ok" && <span className="text-[10px] text-g60">Salvo</span>}
+        <span className="flex items-center gap-2">
+          {status === "ok" && <span className="text-[10px] text-g60">Salvo</span>}
+          {url && status !== "uploading" && (
+            <button
+              type="button"
+              onClick={() => void handleDelete()}
+              className="text-[10px] font-medium text-rose-600 hover:underline"
+              aria-label={`Excluir ${label} ${slot}`}
+            >
+              Excluir
+            </button>
+          )}
+        </span>
       </div>
       {hint && <div className="text-[10px] text-g60 -mt-1">{hint}</div>}
       <div
-        className={`${aspect === "wide" ? "aspect-[4/3]" : "aspect-square"} w-full rounded border border-onix-100 bg-onix-50 bg-center bg-no-repeat bg-contain`}
+        className={`${aspect === "wide" ? "aspect-[4/3]" : "aspect-square"} w-full rounded border border-onix-100 bg-onix-50 bg-center bg-no-repeat bg-contain flex items-center justify-center`}
         style={url ? { backgroundImage: `url("${url}")` } : undefined}
-      />
-      <input
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/svg+xml"
-        disabled={status === "uploading"}
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void handleFile(f);
-        }}
-        className="block w-full text-xs text-onix-800 file:mr-2 file:rounded file:border file:border-onix-100 file:bg-onix-50 file:px-2 file:py-1 file:text-xs file:font-medium hover:file:bg-onix-100"
-      />
-      {status === "uploading" && <p className="text-[10px] text-g60">Enviando…</p>}
+      >
+        {!url && (
+          <span className="text-[10px] uppercase tracking-wider text-onix-300">
+            Vazio
+          </span>
+        )}
+      </div>
+      <label
+        className={`block w-full cursor-pointer rounded-md text-center text-xs font-semibold py-2.5 transition ${
+          status === "uploading"
+            ? "bg-onix-200 text-onix-500 cursor-wait"
+            : "bg-onix-900 text-white hover:bg-onix-800"
+        }`}
+      >
+        {status === "uploading"
+          ? "Enviando…"
+          : url
+            ? "Trocar arquivo"
+            : "Carregar arquivo"}
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg,.png,.jpg,.jpeg,.webp"
+          disabled={status === "uploading"}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleFile(f);
+          }}
+          className="hidden"
+        />
+      </label>
       {status === "error" && <p className="text-[10px] text-red-700">{errorMsg}</p>}
     </div>
   );

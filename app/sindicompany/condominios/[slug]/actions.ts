@@ -6,14 +6,12 @@ import { cookies } from "next/headers";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/sindicompany/auth";
 import { condoFromSlug, slugifyCondo } from "@/lib/sindicompany/condominios";
 import {
-  copiarEquipeParaTodosCondos,
   renameCondoMeta,
   upsertCondoMeta,
   uploadCondoFoto,
   uploadCondoLogo,
   type CondoMetaInput,
 } from "@/lib/sindicompany/condominios-db";
-import { CONDOMINIOS } from "@/lib/sindicompany/condominios";
 import type { Genero } from "@/lib/sindicompany/db";
 import { describeError } from "@/lib/sindicompany/errors";
 
@@ -210,22 +208,8 @@ async function salvarCondoMetaImpl(formData: FormData): Promise<void> {
     ? await maybeUploadFoto(formData, "gestor2_foto", slug, "gestor2")
     : null;
 
-  // Equipe de atendimento: ate 5 membros (nome, cargo, foto). Slots
-  // sem nome E sem cargo sao descartados. Foto: novo upload sobrescreve,
-  // senao mantem a existente.
-  const equipe_atendimento: { nome: string; cargo: string; foto_path: string | null }[] = [];
-  for (let i = 1; i <= 5; i++) {
-    const nm = getStr(formData, `equipe_nome_${i}`);
-    const cg = getStr(formData, `equipe_cargo_${i}`);
-    if (!nm && !cg) continue;
-    const novaFoto = await maybeUploadFoto(formData, `equipe_foto_${i}`, slug, `equipe-${i}`);
-    const fotoExist = getStr(formData, `equipe_foto_existente_${i}`);
-    equipe_atendimento.push({
-      nome: nm,
-      cargo: cg,
-      foto_path: novaFoto ?? fotoExist ?? null,
-    });
-  }
+  // Equipe de atendimento: cadastrada em tela própria (global), não mais
+  // por condomínio.
 
   const novoLogoSindico = await maybeUploadLogo(formData, "logo_sindico_file", slug, "sindico");
   const novoLogoCondominio = await maybeUploadLogo(formData, "logo_condominio_file", slug, "condominio");
@@ -264,7 +248,6 @@ async function salvarCondoMetaImpl(formData: FormData): Promise<void> {
     is_by_sindico,
     comunidade_url: comunidade_url || null,
     comunidade_qrcode_path: novoQrComunidade ?? comunidadeQrExistente ?? null,
-    equipe_atendimento: equipe_atendimento.length ? equipe_atendimento : null,
     ocultar_contato_sindico,
     mostrar_whatsapp_sindico,
     mostrar_email_sindico,
@@ -309,21 +292,4 @@ export async function renomearCondominioAction(formData: FormData): Promise<void
   const novoSlug = slugifyCondo(novo);
   revalidatePath(`/sindicompany/condominios/${novoSlug}`);
   redirect(`/sindicompany/condominios/${novoSlug}?renamed=1`);
-}
-
-export async function copiarEquipeParaTodosAction(formData: FormData): Promise<void> {
-  await requireAuth();
-  const slug = getStr(formData, "slug");
-  const nomeOrigem = getStr(formData, "condo_nome") || condoFromSlug(slug) || "";
-  if (!nomeOrigem) backWithError(slug, "Nao consegui identificar o condominio.");
-  let resultado: { atualizados: number; criados: number; fonte: string };
-  try {
-    resultado = await copiarEquipeParaTodosCondos(nomeOrigem, CONDOMINIOS);
-  } catch (e) {
-    backWithError(slug, `Nao foi possivel copiar a equipe: ${describeError(e)}`);
-  }
-  revalidatePath("/sindicompany/condominios");
-  const total = resultado.atualizados + resultado.criados;
-  const msg = `Equipe copiada para ${total} condominio(s). Atualizados: ${resultado.atualizados}; criados: ${resultado.criados}.`;
-  redirect(`/sindicompany/condominios/${slug}?equipe_copiada=${encodeURIComponent(msg)}`);
 }

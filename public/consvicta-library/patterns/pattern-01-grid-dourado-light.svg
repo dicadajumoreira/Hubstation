@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="1080" height="1080">
+<defs><pattern id="grid-gold" x="0" y="0" width="72" height="72" patternUnits="userSpaceOnUse">
+  <line x1="0" y1="0" x2="0" y2="72" stroke="rgba(176,141,87,.12)" stroke-width="1"/>
+  <line x1="0" y1="0" x2="72" y2="0" stroke="rgba(176,141,87,.12)" stroke-width="1"/>
+</pattern></defs>
+
+  <rect width="400" height="400" fill="#F7F4EF"/>
+  <rect width="400" height="400" fill="url(#grid-gold)"/>
+  <line x1="200" y1="0" x2="200" y2="400" stroke="rgba(176,141,87,.2)" stroke-width="1"/>
+  <line x1="0" y1="200" x2="400" y2="200" stroke="rgba(176,141,87,.2)" stroke-width="1"/>
+  <radialGradient id="o1" cx="70%" cy="30%" r="50%">
+    <stop offset="0%" stop-color="rgba(129,216,208,.08)"/>
+    <stop offset="100%" stop-color="transparent"/>
+  </radialGradient>
+  <rect width="400" height="400" fill="url(#o1)"/>
+
+</svg>

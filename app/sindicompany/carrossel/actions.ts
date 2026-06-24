@@ -9,12 +9,14 @@ import {
   createCarrosselFotoUploadIntent,
   deleteCarrossel,
   getCarrossel,
+  isValidCoverArchetype,
   updateCarrossel,
   uploadCarrosselFotoBytes,
   type CarrosselInput,
 } from "@/lib/sindicompany/carrosseis";
 import { describeError } from "@/lib/sindicompany/errors";
 import { dispatchGenerateCarrossel } from "@/lib/sindicompany/engine";
+import { getMarca, listMarcas } from "@/lib/sindicompany/marcas-db";
 import {
   buildCarrosselPromptSafe,
   generateImage,
@@ -101,22 +103,37 @@ export async function getCarrosselFotoUploadIntent(
 export async function iniciarCarrosselAction(formData: FormData): Promise<void> {
   await requireAuth();
 
+  // Marca data-driven: aceita qualquer slug de marca ATIVA (cadastro).
+  // Marca desconhecida/inativa cai no default sindicompanybr. Antes isso
+  // achatava toda marca nova pra uma das 3 chumbadas — agora o slug real
+  // segue pro engine (buckets/handle/paleta/fontes proprios).
   const brandRaw = getStr(formData, "brand");
-  const brand: "sindicompanybr" | "bysindicompany" | "consvictabr" =
-    brandRaw === "bysindicompany"
-      ? "bysindicompany"
-      : brandRaw === "consvictabr"
-        ? "consvictabr"
-        : "sindicompanybr";
+  const marcasAtivas = await listMarcas({ ativo: true });
+  const brand = marcasAtivas.some((m) => m.slug === brandRaw)
+    ? brandRaw
+    : "sindicompanybr";
   const objetivoRaw = getStr(formData, "objetivo");
-  const objetivosValidos =
-    brand === "bysindicompany"
-      ? ["comentarios", "salvamentos", "clientes", "autoridade"]
-      : brand === "consvictabr"
-        ? ["comentarios", "salvamentos", "clientes", "autoridade"]
-        : ["comentarios", "salvamentos", "clientes", "educar"];
+  // O wizard oferece os 5 objetivos pra qualquer marca, entao a validacao
+  // aceita os 5 (antes restringia por marca e rejeitava combinacoes que a
+  // UI permitia — ex: Consvicta + Educar).
+  const objetivosValidos = [
+    "comentarios",
+    "salvamentos",
+    "clientes",
+    "autoridade",
+    "educar",
+  ];
   const objetivo = objetivosValidos.includes(objetivoRaw) ? objetivoRaw : "";
-  const titulo = getStr(formData, "titulo");
+  // 'data_postagem' substituiu o antigo 'titulo' no form. O titulo
+  // continua existindo na tabela (usado no AI prompt, fallback de capa,
+  // ZIPs, listagem) e e auto-derivado da data como "Postagem DD/MM/YYYY".
+  // HTML <input type="date"> ja garante o formato ISO YYYY-MM-DD.
+  const data_postagem = getStr(formData, "data_postagem");
+  const tituloDerivado = (() => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(data_postagem);
+    return m ? `Postagem ${m[3]}/${m[2]}/${m[1]}` : "";
+  })();
+  const titulo = tituloDerivado;
   const temaSelecionado = getStr(formData, "tema");
   const temaOutro = getStr(formData, "tema_outro");
   // 'Outro'/'Outros' eh um marcador da UI — substitui pelo texto livre
@@ -127,11 +144,16 @@ export async function iniciarCarrosselAction(formData: FormData): Promise<void> 
   const formato = getStr(formData, "formato");
   const briefing = getStr(formData, "briefing");
   const n_slides_raw = parseInt(getStr(formData, "n_slides"), 10);
+  // Carrosseis tem de 5 a 10 slides. Fora disso, clampa pro intervalo.
   const n_slides = Number.isFinite(n_slides_raw)
-    ? Math.max(1, Math.min(10, n_slides_raw))
+    ? Math.max(5, Math.min(10, n_slides_raw))
     : 6;
+  const coverArchetypeRaw = getStr(formData, "cover_archetype");
+  const cover_archetype = isValidCoverArchetype(coverArchetypeRaw)
+    ? coverArchetypeRaw
+    : undefined;
 
-  if (!titulo) backTo("/sindicompany/carrossel/novo", "Informe o título do carrossel.", formData);
+  if (!titulo) backTo("/sindicompany/carrossel/novo", "Informe a data de postagem.", formData);
   if (!objetivo) {
     backTo("/sindicompany/carrossel/novo", "Selecione o objetivo do carrossel.", formData);
   }
@@ -149,10 +171,12 @@ export async function iniciarCarrosselAction(formData: FormData): Promise<void> 
     brand,
     objetivo: objetivo || undefined,
     titulo,
+    data_postagem: data_postagem || undefined,
     tema,
     formato,
     briefing: briefing || undefined,
     n_slides,
+    cover_archetype,
   };
 
   let carrossel;
@@ -346,6 +370,32 @@ export async function generateFotoCapaWithAI(input: {
     if (cena.ok) subject = cena.sceneEn;
   }
 
+  // Orientacao de cor da foto de capa puxa a PALETA DA MARCA (cadastro).
+  // Sem paleta no DB -> fallback historico (pastels Sindicompany).
+  const marca = await getMarca(carrossel.brand ?? "sindicompanybr");
+  function paletteGuidance(): string {
+    const pal = marca?.paleta;
+    if (!pal) {
+      return (
+        `Color palette MUST be dominated by soft brand pastels: ` +
+        `mint cyan #84C7D3, warm sand beige #DABDA9, soft lavender #B8C0FF, ` +
+        `pure white #FFFFFF and very light gray #F4F4F5. Walls, clothing, ` +
+        `furniture, plants and ambient light should pull toward this airy, ` +
+        `low-saturation pastel range. Avoid heavy reds, oranges, dark blues, ` +
+        `forest greens or saturated primaries. `
+      );
+    }
+    const cores = [pal.mint, pal.sand, pal.lavender, pal.purple, pal.gray_5, pal.white]
+      .filter(Boolean)
+      .join(", ");
+    return (
+      `Color palette should be dominated by the brand colors: ${cores}. ` +
+      `Walls, clothing, furniture, plants and ambient light should pull toward ` +
+      `this brand range — harmonious, editorial, low-saturation. Avoid garish ` +
+      `saturated primaries and colors that clash with this palette. `
+    );
+  }
+
   function buildPrompt(scene: string): string {
     return scene
       ? `Ultra-realistic editorial photograph, 8K quality, hyper-detailed, ` +
@@ -355,12 +405,7 @@ export async function generateFotoCapaWithAI(input: {
         `building setting, professional DSLR camera, natural daylight, shallow ` +
         `depth of field, sharp focus on subject, photorealistic textures, ` +
         `crisp details on every surface, no text, no logos. ` +
-        `Color palette MUST be dominated by Sindicompany brand pastels: ` +
-        `mint cyan #84C7D3, warm sand beige #DABDA9, soft lavender #B8C0FF, ` +
-        `pure white #FFFFFF and very light gray #F4F4F5. Walls, clothing, ` +
-        `furniture, plants and ambient light should pull toward this airy, ` +
-        `low-saturation pastel range. Avoid heavy reds, oranges, dark blues, ` +
-        `forest greens or saturated primaries. ` +
+        paletteGuidance() +
         `Composition: subject occupies the TOP HALF of the frame; bottom half ` +
         `is calmer (sky, wall, blurred background) so 50% of the image can be ` +
         `covered by a text overlay added later.`
@@ -454,6 +499,23 @@ export async function excluirCarrosselAction(carrosselId: string): Promise<void>
   } catch (e) {
     // segue silenciosamente — a lista vai refletir o estado real do banco
     console.error("[carrossel] falha ao excluir:", e);
+  }
+  revalidatePath("/sindicompany/carrossel");
+  redirect("/sindicompany/carrossel");
+}
+
+// Exclusao em massa: recebe os ids selecionados (checkboxes name="ids").
+export async function excluirVariosCarrosseisAction(
+  formData: FormData,
+): Promise<void> {
+  await requireAuth();
+  const ids = formData.getAll("ids").map(String).filter(Boolean);
+  for (const id of ids) {
+    try {
+      await deleteCarrossel(id);
+    } catch (e) {
+      console.error("[carrossel] falha ao excluir (bulk):", id, e);
+    }
   }
   revalidatePath("/sindicompany/carrossel");
   redirect("/sindicompany/carrossel");

@@ -3,6 +3,58 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const TABLE = "comunicados";
 const BUCKET = "condominios-fotos"; // reaproveita o bucket publico de fotos
 
+/** Sanitiza o HTML do corpo do comunicado: so deixa passar a whitelist
+ *  <p>, <br>, <strong>, <b>, <em>, <i>, <u> (sem atributos). Qualquer
+ *  outra tag, atributo, comentario, script etc. e' removido. Texto puro
+ *  passa intacto.
+ *
+ *  Implementacao: parser de estado simples baseado em regex. Nao usa
+ *  DOMParser (server-side nao tem) nem dependencia externa (mantem o
+ *  bundle pequeno). */
+export function sanitizarCorpoHtml(input: string): string {
+  if (!input) return "";
+  // Tags permitidas (lowercase, void status). 'br' e' void; resto eh
+  // par de abertura/fechamento.
+  const allow: Record<string, { void: boolean }> = {
+    p: { void: false },
+    br: { void: true },
+    strong: { void: false },
+    b: { void: false },
+    em: { void: false },
+    i: { void: false },
+    u: { void: false },
+  };
+  // Mata HTML comments e CDATA antes de qualquer coisa.
+  let s = input.replace(/<!--[\s\S]*?-->/g, "").replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "");
+  // Mata <script>/<style> com todo o conteudo.
+  s = s.replace(/<\s*(script|style)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "");
+  // Substitui cada tag por uma versao normalizada SE permitida; remove
+  // a tag inteira (mantendo o texto entre) se nao permitida.
+  s = s.replace(
+    /<\s*\/?\s*([a-zA-Z][a-zA-Z0-9]*)\b[^>]*?\/?>/g,
+    (_match, rawTag: string) => {
+      const tag = rawTag.toLowerCase();
+      const meta = allow[tag];
+      if (!meta) return ""; // remove tag desconhecida; conteudo (texto) sobrevive
+      const isClose = /<\s*\//.test(_match);
+      // Normaliza: <strong> / </strong> / <br> sem atributos
+      if (meta.void) return `<${tag}>`;
+      return isClose ? `</${tag}>` : `<${tag}>`;
+    },
+  );
+  // Por seguranca: se sobrou algum '<' solto que escapou da regex
+  // (ex: '<' no meio do texto), escapa.
+  s = s.replace(/<(?![a-zA-Z\/])/g, "&lt;");
+  return s.trim();
+}
+
+/** Verdadeiro se o corpo (apos sanitizar) tem so paragrafos vazios. */
+export function corpoEstaVazio(input: string): boolean {
+  if (!input) return true;
+  const limpo = input.replace(/<[^>]+>/g, "").replace(/&nbsp;|\s/g, "");
+  return limpo.length === 0;
+}
+
 export interface Comunicado {
   id: string;
   condominio: string;
@@ -50,7 +102,7 @@ export async function createComunicado(input: ComunicadoInput): Promise<Comunica
       titulo: input.titulo,
       subtitulo: input.subtitulo ?? null,
       briefing: input.briefing ?? null,
-      corpo: input.corpo ?? "",
+      corpo: sanitizarCorpoHtml(input.corpo ?? ""),
       ilustracao_path: input.ilustracao_path ?? null,
     })
     .select()
@@ -69,7 +121,7 @@ export async function updateComunicado(
   if (patch.titulo !== undefined) payload.titulo = patch.titulo;
   if (patch.subtitulo !== undefined) payload.subtitulo = patch.subtitulo ?? null;
   if (patch.briefing !== undefined) payload.briefing = patch.briefing ?? null;
-  if (patch.corpo !== undefined) payload.corpo = patch.corpo ?? "";
+  if (patch.corpo !== undefined) payload.corpo = sanitizarCorpoHtml(patch.corpo ?? "");
   if (patch.ilustracao_path !== undefined) payload.ilustracao_path = patch.ilustracao_path ?? null;
   const { error } = await supabase.from(TABLE).update(payload).eq("id", id);
   if (error) throw error;

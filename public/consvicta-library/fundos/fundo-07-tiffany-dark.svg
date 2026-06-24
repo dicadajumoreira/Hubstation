@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" width="1080" height="1080">
+  <defs>
+    <linearGradient id="tg7" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4da8a0"/>
+      <stop offset="100%" stop-color="#2d7d78"/>
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1080" fill="url(#tg7)"/>
+  <rect width="1080" height="1080" fill="#0A0A0A" opacity="0.55"/>
+  <rect x="0" y="1072" width="1080" height="8" fill="#FFFFFF" opacity="0.15"/>
+</svg>

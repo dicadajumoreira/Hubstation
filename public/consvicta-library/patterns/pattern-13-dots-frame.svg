@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="1080" height="1080">
+<defs><pattern id="dots-gold" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+  <circle cx="14" cy="14" r="1.5" fill="rgba(176,141,87,.25)"/>
+</pattern></defs>
+
+  <rect width="400" height="400" fill="#2B2B2B"/>
+  <rect width="400" height="400" fill="url(#dots-gold)"/>
+  <polyline points="32,80 32,32 80,32"   fill="none" stroke="rgba(129,216,208,.5)" stroke-width="1.5" stroke-linecap="square"/>
+  <polyline points="320,32 368,32 368,80" fill="none" stroke="rgba(129,216,208,.5)" stroke-width="1.5" stroke-linecap="square"/>
+  <polyline points="32,320 32,368 80,368" fill="none" stroke="rgba(129,216,208,.5)" stroke-width="1.5" stroke-linecap="square"/>
+  <polyline points="320,368 368,368 368,320" fill="none" stroke="rgba(129,216,208,.5)" stroke-width="1.5" stroke-linecap="square"/>
+  <radialGradient id="o13" cx="50%" cy="50%" r="45%">
+    <stop offset="0%" stop-color="rgba(176,141,87,.06)"/>
+    <stop offset="100%" stop-color="transparent"/>
+  </radialGradient>
+  <rect width="400" height="400" fill="url(#o13)"/>
+
+</svg>

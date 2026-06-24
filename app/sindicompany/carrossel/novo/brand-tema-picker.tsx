@@ -5,113 +5,83 @@ import { useState } from "react";
 const inputCls =
   "block w-full rounded-md border border-onix-100 bg-white px-3 py-2 text-sm text-onix-900 focus:outline-none focus:ring-2 focus:ring-mint-300";
 
+// Objetivos GLOBAIS — iguais pra todas as marcas (decisao da Juliana).
+// Os ids batem 1:1 com OBJETIVO_INSTRUCOES do openai-text.ts.
+const OBJETIVOS = [
+  {
+    id: "comentarios",
+    label: "Gerar comentários (debate)",
+    hint: "Divide opiniões. CTA binário (SIM/NÃO). Sucesso = discussão.",
+  },
+  {
+    id: "salvamentos",
+    label: "Gerar salvamentos (utilidade)",
+    hint: "Tão útil que guarda. Ancora lei/dado. CTA 'Salva esse post'.",
+  },
+  {
+    id: "clientes",
+    label: "Atrair clientes",
+    hint: "Mostra dor + resultado com número. CTA leve, nunca anúncio.",
+  },
+  {
+    id: "autoridade",
+    label: "Posicionar autoridade",
+    hint: "Manifesto/tendência/visão de mercado. CTA institucional.",
+  },
+  {
+    id: "educar",
+    label: "Educar o público",
+    hint: "Surpresa + identificação. Linguagem acessível, sem juridiquês.",
+  },
+];
+
+export interface MarcaOption {
+  slug: string;
+  nome: string;
+  handle: string;
+  temas: string[];
+}
+
 interface Props {
-  temasSindico: string[];
-  temasBy: string[];
-  temasConsvicta: string[];
+  marcas: MarcaOption[];
   defaultBrand: string;
   defaultObjetivo: string;
   defaultTema: string;
   defaultTemaOutro: string;
 }
 
-const OBJETIVOS_SINDICO = [
-  {
-    id: "comentarios",
-    label: "Gerar comentários (debate)",
-    hint: "Divide opiniões. CTA binário (SIM/NÃO). Sucesso = discussão com dois lados.",
-  },
-  {
-    id: "salvamentos",
-    label: "Gerar salvamentos (utilidade)",
-    hint: "Tão útil que o leitor guarda. Cita lei/artigo/número. CTA 'Salva esse post'.",
-  },
-  {
-    id: "clientes",
-    label: "Atrair novos clientes",
-    hint: "Mostra o caos e o resultado. Marca pode aparecer. CTA leve 'Seu condomínio está assim?'.",
-  },
-  {
-    id: "educar",
-    label: "Educar moradores",
-    hint: "Surpresa + identificação. Linguagem acessível, sem juridiquês.",
-  },
-];
-
-const OBJETIVOS_BY = [
-  {
-    id: "comentarios",
-    label: "Debate entre síndicos",
-    hint: "Identificação + divisão entre síndicos. CTA tipo 'SÍNDICO OPERACIONAL ou ESTRATÉGICO'.",
-  },
-  {
-    id: "salvamentos",
-    label: "Crescimento profissional",
-    hint: "Ferramenta/framework que melhora a gestão. CTA 'Salva isso' / 'Manda pra outro síndico'.",
-  },
-  {
-    id: "clientes",
-    label: "Atrair síndicos pro By",
-    hint: "'Eu não quero crescer sozinho.' By como elite de mercado. CTA seletivo, nunca recrutamento comum.",
-  },
-  {
-    id: "autoridade",
-    label: "Posicionar autoridade no mercado",
-    hint: "Manifesto/tendência. 'Eles estão à frente do mercado.' CTA institucional 'O mercado mudou.'.",
-  },
-];
-
-const OBJETIVOS_CONSVICTA = [
-  { id: "comentarios", label: "Gerar comentários (debate)", hint: "Dois lados defensáveis. CTA binário." },
-  { id: "salvamentos", label: "Gerar salvamentos (utilidade)", hint: "Conteúdo útil que se guarda. CTA 'Salva esse post'." },
-  { id: "clientes", label: "Atrair clientes", hint: "Mostra dor + resultado. CTA leve." },
-  { id: "autoridade", label: "Posicionar autoridade", hint: "Visão de marca, manifesto, tendência. CTA institucional." },
-];
-
-/** Combina o seletor de MARCA + OBJETIVO + TEMA. A lista de temas
- *  muda conforme a marca; o objetivo (Passo 0) só aparece pro
- *  @sindicompanybr e define tom, gancho, CTA, formato e critério de
- *  sucesso do carrossel. */
-function _temasFor(brand: string, temasSindico: string[], temasBy: string[], temasConsvicta: string[]): string[] {
-  if (brand === "bysindicompany") return temasBy;
-  if (brand === "consvictabr") return temasConsvicta;
-  return temasSindico;
-}
-function _objetivosFor(brand: string) {
-  if (brand === "bysindicompany") return OBJETIVOS_BY;
-  if (brand === "consvictabr") return OBJETIVOS_CONSVICTA;
-  return OBJETIVOS_SINDICO;
-}
-
+/** Seletor de MARCA + OBJETIVO + TEMA do /carrossel/novo. As marcas e os
+ *  temas vem do DB (tabela marcas); o objetivo e global. Trocar a marca
+ *  troca a lista de temas e define a voz/estrategia do copy (la no
+ *  gerarTresCopies, via persona da marca). */
 export function BrandTemaPicker({
-  temasSindico,
-  temasBy,
-  temasConsvicta,
+  marcas,
   defaultBrand,
   defaultObjetivo,
   defaultTema,
   defaultTemaOutro,
 }: Props) {
-  const [brand, setBrand] = useState(
-    defaultBrand === "bysindicompany" || defaultBrand === "consvictabr"
-      ? defaultBrand
-      : "sindicompanybr",
-  );
+  const initialBrand = marcas.some((m) => m.slug === defaultBrand)
+    ? defaultBrand
+    : marcas[0]?.slug ?? "";
+  const [brand, setBrand] = useState(initialBrand);
+  const temas = marcas.find((m) => m.slug === brand)?.temas ?? [];
+  // Ordem alfabetica (pt-BR, ignora acento/caixa) e remove qualquer
+  // 'Outro'/'Outros' vindo do DB pra nao duplicar a opcao fixa de tema
+  // livre, que sempre fica por ultimo.
+  const temasOrdenados = [...temas]
+    .filter((t) => t !== "Outro" && t !== "Outros")
+    .sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
   const [objetivo, setObjetivo] = useState(defaultObjetivo);
-  const temas = _temasFor(brand, temasSindico, temasBy, temasConsvicta);
   const [tema, setTema] = useState(
     temas.includes(defaultTema) ? defaultTema : "",
   );
   const isOutro = tema === "Outro" || tema === "Outros";
-  const isSindico = brand === "sindicompanybr";
-  const objetivos = _objetivosFor(brand);
 
-  function onBrandChange(b: string) {
-    setBrand(b);
-    const novaLista = _temasFor(b, temasSindico, temasBy, temasConsvicta);
-    if (!novaLista.includes(tema)) setTema("");
-    const objIds = _objetivosFor(b).map((o) => o.id);
-    if (!objIds.includes(objetivo)) setObjetivo("");
+  function onBrandChange(slug: string) {
+    setBrand(slug);
+    const novaLista = marcas.find((m) => m.slug === slug)?.temas ?? [];
+    if (tema !== "Outro" && !novaLista.includes(tema)) setTema("");
   }
 
   return (
@@ -122,28 +92,24 @@ export function BrandTemaPicker({
           Pra qual Instagram este carrossel é. Cada marca tem público,
           objetivo e linguagem próprios.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {[
-            { id: "sindicompanybr", label: "@sindicompanybr", hint: "Morador" },
-            { id: "bysindicompany", label: "@bysindicompany", hint: "Síndico profissional" },
-            { id: "consvictabr", label: "@consvictabr", hint: "Consvicta" },
-          ].map((b) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {marcas.map((m) => (
             <label
-              key={b.id}
+              key={m.slug}
               className="flex items-start gap-2 rounded-md border border-onix-100 bg-white px-3 py-2 cursor-pointer hover:bg-onix-50"
             >
               <input
                 type="radio"
                 name="brand"
-                value={b.id}
-                checked={brand === b.id}
-                onChange={() => onBrandChange(b.id)}
+                value={m.slug}
+                checked={brand === m.slug}
+                onChange={() => onBrandChange(m.slug)}
                 required
                 className="mt-1"
               />
               <div>
-                <div className="text-sm font-medium text-onix-900">{b.label}</div>
-                <div className="text-xs text-g60">{b.hint}</div>
+                <div className="text-sm font-medium text-onix-900">{m.handle}</div>
+                <div className="text-xs text-g60">{m.nome}</div>
               </div>
             </label>
           ))}
@@ -155,12 +121,11 @@ export function BrandTemaPicker({
           Objetivo do carrossel
         </label>
         <p className="text-xs text-g60">
-          {isSindico
-            ? "O que o post precisa provocar no morador — muda tom, gancho, formato, CTA e critério de sucesso. Escolha UM."
-            : "O que o post precisa provocar no síndico profissional — muda linguagem, gatilhos, formato, CTA e percepção de valor. Escolha UM."}
+          O que o post precisa provocar — muda tom, gancho, formato, CTA e
+          critério de sucesso. Escolha UM.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {objetivos.map((o) => (
+          {OBJETIVOS.map((o) => (
             <label
               key={o.id}
               className="flex items-start gap-2 rounded-md border border-onix-100 bg-white px-3 py-2 cursor-pointer hover:bg-onix-50"
@@ -199,11 +164,12 @@ export function BrandTemaPicker({
           className={inputCls}
         >
           <option value="">— Selecione —</option>
-          {temas.map((t) => (
+          {temasOrdenados.map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
           ))}
+          <option value="Outro">Outro (tema livre)</option>
         </select>
         {isOutro && (
           <input

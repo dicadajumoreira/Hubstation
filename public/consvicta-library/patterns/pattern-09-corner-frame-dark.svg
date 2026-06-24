@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="1080" height="1080">
+<defs><pattern id="grid-dark" x="0" y="0" width="72" height="72" patternUnits="userSpaceOnUse">
+  <line x1="0" y1="0" x2="0" y2="72" stroke="rgba(176,141,87,.07)" stroke-width="1"/>
+  <line x1="0" y1="0" x2="72" y2="0" stroke="rgba(176,141,87,.07)" stroke-width="1"/>
+</pattern></defs>
+
+  <rect width="400" height="400" fill="#1A1714"/>
+  <rect width="400" height="400" fill="url(#grid-dark)"/>
+  <rect x="20" y="20" width="360" height="360" fill="none" stroke="rgba(176,141,87,.15)" stroke-width="1"/>
+  <rect x="30" y="30" width="340" height="340" fill="none" stroke="rgba(176,141,87,.08)" stroke-width="1"/>
+  <polyline points="40,100 40,40 100,40" fill="none" stroke="#B08D57" stroke-width="1.5" stroke-linecap="square"/>
+  <polyline points="300,40 360,40 360,100" fill="none" stroke="#B08D57" stroke-width="1.5" stroke-linecap="square"/>
+  <polyline points="40,300 40,360 100,360" fill="none" stroke="#B08D57" stroke-width="1.5" stroke-linecap="square"/>
+  <polyline points="300,360 360,360 360,300" fill="none" stroke="#B08D57" stroke-width="1.5" stroke-linecap="square"/>
+  <line x1="70" y1="200" x2="170" y2="200" stroke="rgba(129,216,208,.3)" stroke-width="1"/>
+  <line x1="230" y1="200" x2="330" y2="200" stroke="rgba(129,216,208,.3)" stroke-width="1"/>
+  <radialGradient id="o9" cx="50%" cy="50%" r="40%">
+    <stop offset="0%" stop-color="rgba(176,141,87,.06)"/>
+    <stop offset="100%" stop-color="transparent"/>
+  </radialGradient>
+  <rect width="400" height="400" fill="url(#o9)"/>
+
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="1080" height="1080">
+<defs><symbol id="csym" viewBox="0 0 93 90"><path d="M73.8183 0C88.4042 0.000142531 97.6013 15.7588 90.8183 28.6758L90.4814 29.2891L62.6093 78.293H62.5507C54.7621 90.2459 37.0731 89.8933 29.871 77.2324L2.60342 29.2891C-1.10106 22.7839 -0.625882 15.4398 2.60147 9.75879C5.34232 4.93859 9.43092 2.49854 12.8085 1.27441C16.1641 0.0583528 18.9221 5.44624e-05 19.2665 0H73.8183Z"/></symbol><pattern id="grid-dark" x="0" y="0" width="72" height="72" patternUnits="userSpaceOnUse">
+  <line x1="0" y1="0" x2="0" y2="72" stroke="rgba(176,141,87,.07)" stroke-width="1"/>
+  <line x1="0" y1="0" x2="72" y2="0" stroke="rgba(176,141,87,.07)" stroke-width="1"/>
+</pattern></defs>
+
+  <rect width="400" height="400" fill="#1A1714"/>
+  <rect width="400" height="400" fill="url(#grid-dark)"/>
+  <use href="#csym" x="20" y="20" width="360" height="350" fill="rgba(129,216,208,.05)"/>
+  <use href="#csym" x="-20" y="-20" width="120" height="115" fill="rgba(129,216,208,.04)"/>
+  <use href="#csym" x="300" y="280" width="120" height="115" fill="rgba(129,216,208,.04)"/>
+  <radialGradient id="o6" cx="50%" cy="40%" r="45%">
+    <stop offset="0%" stop-color="rgba(129,216,208,.08)"/>
+    <stop offset="100%" stop-color="transparent"/>
+  </radialGradient>
+  <rect width="400" height="400" fill="url(#o6)"/>
+
+</svg>

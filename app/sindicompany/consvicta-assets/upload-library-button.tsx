@@ -37,8 +37,9 @@ export function UploadLibraryButton() {
           </h3>
           <p className="text-xs text-g60 sm:max-w-2xl">
             Em 1 clique sobe os 2 logotipos (wordmark + símbolo) +
-            20 ícones curados pros slots Supabase abaixo.
-            Idempotente — pode rodar várias vezes, vai apenas substituir.
+            20 ícones curados + 13 patterns + 20 fundos do brand book
+            pros slots Supabase abaixo. Idempotente — pode rodar
+            várias vezes, vai apenas substituir.
           </p>
         </div>
         {!confirming ? (

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080" width="1080" height="1080">
+  <rect width="1080" height="1080" fill="#0A0A0A"/>
+  <circle cx="540" cy="540" r="60" fill="none" stroke="#81D8D0" stroke-width="1" opacity="0.120"/><circle cx="540" cy="540" r="120" fill="none" stroke="#81D8D0" stroke-width="1" opacity="0.108"/><circle cx="540" cy="540" r="180" fill="none" stroke="#81D8D0" stroke-width="1" opacity="0.096"/><circle cx="540" cy="540" r="240" fill="none" stroke="#81D8D0" stroke-width="1" opacity="0.084"/><circle cx="540" cy="540" r="300" fill="none" stroke="#81D8D0" stroke-width="1" opacity="0.072"/><circle cx="540" cy="540" r="360" fill="none" stroke="#81D8D0" stroke-width="1" opacity="0.060"/><circle cx="540" cy="540" r="420" fill="none" stroke="#81D8D0" stroke-width="1" opacity="0.048"/><circle cx="540" cy="540" r="480" fill="none" stroke="#81D8D0" stroke-width="1" opacity="0.036"/>
+  <circle cx="540" cy="540" r="40" fill="none" stroke="#81D8D0" stroke-width="1.5" opacity="0.25"/>
+  <line x1="0" y1="1079" x2="1080" y2="1079" stroke="#81D8D0" stroke-width="2" opacity="0.3"/>
+</svg>

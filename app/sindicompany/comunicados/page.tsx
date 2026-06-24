@@ -7,7 +7,7 @@ import { DashboardShell } from "../shell";
 
 function fmtDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" });
   } catch {
     return iso;
   }

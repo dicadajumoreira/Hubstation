@@ -6,8 +6,12 @@ import {
   listCarrosseis,
   type Carrossel,
 } from "@/lib/sindicompany/carrosseis";
+import { listMarcas } from "@/lib/sindicompany/marcas-db";
+import { describeError } from "@/lib/sindicompany/errors";
 import { DashboardShell } from "../shell";
 import { CarrosselRowActions } from "./row-actions";
+import { BulkDeleteBar } from "./bulk-delete-bar";
+import { excluirVariosCarrosseisAction } from "./actions";
 
 const STATUS_LABELS: Record<Carrossel["status"], string> = {
   rascunho: "Rascunho",
@@ -25,6 +29,7 @@ const STATUS_CLASSES: Record<Carrossel["status"], string> = {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -45,8 +50,22 @@ export default async function CarrosseisPage() {
   try {
     carrosseis = await listCarrosseis();
   } catch (e) {
-    dbError =
-      "Tabela 'carrosseis' não existe ainda. Rode a migration 20260520_carrosseis.sql no Supabase.";
+    // Mostra a causa REAL (antes era um texto fixo de "rode a migration"
+    // que mascarava erro de conexão, projeto pausado, RLS, etc.).
+    const code =
+      e && typeof e === "object" && "code" in e
+        ? ` [${(e as { code?: string }).code}]`
+        : "";
+    dbError = `Não consegui carregar os carrosséis: ${describeError(e)}${code}`;
+  }
+
+  // Mapa slug -> handle pra rotular a marca (inclui marcas novas, nao so
+  // as 3 chumbadas). Falha silenciosa: cai no proprio slug.
+  const handlePorMarca = new Map<string, string>();
+  try {
+    for (const m of await listMarcas()) handlePorMarca.set(m.slug, m.handle);
+  } catch {
+    // sem marcas -> usa o slug como rotulo
   }
 
   return (
@@ -65,12 +84,20 @@ export default async function CarrosseisPage() {
               com identidade visual da marca aplicada automaticamente.
             </p>
           </div>
-          <Link
-            href="/sindicompany/carrossel/novo"
-            className="inline-flex items-center px-4 py-2.5 rounded-lg bg-onix-900 text-white font-medium hover:bg-onix-800 text-sm"
-          >
-            + Novo carrossel
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/sindicompany/carrossel/pauteiro"
+              className="inline-flex items-center px-4 py-2.5 rounded-lg border border-onix-200 bg-white text-onix-900 font-medium hover:bg-onix-50 text-sm"
+            >
+              Pauteiro
+            </Link>
+            <Link
+              href="/sindicompany/carrossel/novo"
+              className="inline-flex items-center px-4 py-2.5 rounded-lg bg-onix-900 text-white font-medium hover:bg-onix-800 text-sm"
+            >
+              + Novo carrossel
+            </Link>
+          </div>
         </header>
 
         {dbError && (
@@ -99,15 +126,21 @@ export default async function CarrosseisPage() {
         )}
 
         {carrosseis.length > 0 && (
-          <div className="rounded-xl border border-onix-100 bg-white overflow-x-auto">
+          <form
+            action={excluirVariosCarrosseisAction}
+            className="rounded-xl border border-onix-100 bg-white overflow-hidden"
+          >
+            <BulkDeleteBar />
+            <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[840px]">
               <thead className="bg-onix-50">
                 <tr>
+                  <th className="w-10 px-5 py-3"></th>
                   <th className="text-left font-semibold text-onix-900 px-5 py-3">
                     Marca
                   </th>
                   <th className="text-left font-semibold text-onix-900 px-5 py-3">
-                    Título
+                    Postagem
                   </th>
                   <th className="text-left font-semibold text-onix-900 px-5 py-3">
                     Tema
@@ -136,12 +169,18 @@ export default async function CarrosseisPage() {
                     className="border-t border-onix-100 hover:bg-onix-50/50"
                   >
                     <td className="px-5 py-3">
+                      <input
+                        type="checkbox"
+                        name="ids"
+                        value={c.id}
+                        className="carrossel-check rounded border-onix-300"
+                        aria-label={`Selecionar ${c.titulo}`}
+                      />
+                    </td>
+                    <td className="px-5 py-3">
                       <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-onix-100 text-onix-800">
-                        {c.brand === "bysindicompany"
-                          ? "@bysindicompany"
-                          : c.brand === "consvictabr"
-                            ? "@consvictabr"
-                            : "@sindicompanybr"}
+                        {handlePorMarca.get(c.brand ?? "") ??
+                          `@${c.brand ?? "sindicompanybr"}`}
                       </span>
                     </td>
                     <td className="px-5 py-3">
@@ -174,7 +213,8 @@ export default async function CarrosseisPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </form>
         )}
       </main>
     </DashboardShell>

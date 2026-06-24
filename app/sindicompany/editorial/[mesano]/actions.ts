@@ -97,6 +97,8 @@ export async function salvarEditorialAction(formData: FormData): Promise<void> {
     receita_descricao: getStr(formData, "receita_descricao") || undefined,
     carta_sindico_tema: getStr(formData, "carta_sindico_tema") || undefined,
     carta_gestor_tema: getStr(formData, "carta_gestor_tema") || undefined,
+    dicas_praticas_temas: getStr(formData, "dicas_praticas_temas") || undefined,
+    vida_condominial_tema: getStr(formData, "vida_condominial_tema") || undefined,
     notas_editor_geral: getStr(formData, "notas_editor_geral") || undefined,
   };
 

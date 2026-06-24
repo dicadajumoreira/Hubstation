@@ -441,21 +441,34 @@ async function _listSlotUrls(
   max: number,
 ): Promise<(string | null)[]> {
   const supabase = createAdminClient();
+  // Bumpa limit pra 1000 pra cobrir bibliotecas grandes (Consvicta tem
+  // 86 icones). Filenames seguem padrao basename-N.ext, N de 1 a 999.
   const { data, error } = await supabase.storage
     .from(BUCKET)
-    .list(prefix, { limit: 100 });
+    .list(prefix, { limit: 1000 });
   if (error || !data) return Array(max).fill(null);
-  const bySlot: (string | null)[] = Array(max).fill(null);
-  const re = new RegExp(`^${basename}-(\\d{1,2})\\.(png|jpg|jpeg|webp|svg)$`, "i");
+  // Regex aceita 1-3 digitos no slot (suporta ate slot 999).
+  const re = new RegExp(`^${basename}-(\\d{1,3})\\.(png|jpg|jpeg|webp|svg)$`, "i");
+  const found = new Map<number, string>();
+  let maxSlot = max;
   for (const obj of data) {
     const m = obj.name.match(re);
     if (!m) continue;
     const slot = parseInt(m[1], 10);
-    if (slot < 1 || slot > max) continue;
+    if (slot < 1) continue;
     const { data: pub } = supabase.storage
       .from(BUCKET)
       .getPublicUrl(`${prefix}/${obj.name}`);
-    bySlot[slot - 1] = `${pub.publicUrl}?v=${obj.updated_at ?? obj.created_at ?? Date.now()}`;
+    found.set(
+      slot,
+      `${pub.publicUrl}?v=${obj.updated_at ?? obj.created_at ?? Date.now()}`,
+    );
+    if (slot > maxSlot) maxSlot = slot;
+  }
+  // Array sparse ate maxSlot (= max(parametro, maior slot encontrado))
+  const bySlot: (string | null)[] = Array(maxSlot).fill(null);
+  for (const [slot, url] of found.entries()) {
+    bySlot[slot - 1] = url;
   }
   return bySlot;
 }

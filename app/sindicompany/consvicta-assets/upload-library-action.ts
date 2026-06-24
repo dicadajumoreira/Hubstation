@@ -6,7 +6,11 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/sindicompany/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { CONSVICTA_LIBRARY_ICONS } from "./library-manifest";
+import {
+  CONSVICTA_LIBRARY_FUNDOS,
+  CONSVICTA_LIBRARY_ICONS,
+  CONSVICTA_LIBRARY_PATTERNS,
+} from "./library-manifest";
 
 const BUCKET = "condominios-fotos";
 
@@ -116,13 +120,21 @@ export async function uploadEmbeddedConsvictaAssets(): Promise<UploadResult> {
     await upload(src, `__consvicta-logos/logo-${slot}.svg`);
   }
 
-  // Icons — usa manifest hardcoded em vez de readdir
-  const iconFiles = new Set(CONSVICTA_LIBRARY_ICONS);
+  // Icons — todos os 86 da biblioteca embutida. Slots 1-20 sao
+  // curados (slot 2 = capa default, slot 6 = CTA default, etc).
+  // Slots 21-86 recebem o restante em ordem alfabetica do manifest.
+  // Engine usa smart-picker semantico que indexa por keyword no
+  // titulo+body, entao a ordem dos slots nao afeta o render — mas
+  // tem todos os 86 disponiveis caso queira override manual.
   const iconsRoot = "public/consvicta-library/icons";
+  const iconsAll = [...CONSVICTA_LIBRARY_ICONS].sort();
+  const curatedSet = new Set(ICON_MAP.map((m) => `${m.name}.svg`));
+  const remainingIcons = iconsAll.filter((f) => !curatedSet.has(f));
 
+  // Slots 1-20: curados (mesma ordem do ICON_MAP)
   for (const { slot, name } of ICON_MAP) {
     const file = `${name}.svg`;
-    if (!iconFiles.has(file)) {
+    if (!iconsAll.includes(file)) {
       failed += 1;
       details.push({
         path: `__consvicta-icons/icon-${slot}.svg`,
@@ -134,6 +146,43 @@ export async function uploadEmbeddedConsvictaAssets(): Promise<UploadResult> {
     await upload(
       path.join(iconsRoot, file),
       `__consvicta-icons/icon-${slot}.svg`,
+    );
+  }
+  // Slots 21+: resto da biblioteca em ordem
+  for (let i = 0; i < remainingIcons.length; i++) {
+    const slot = ICON_MAP.length + 1 + i; // 21, 22, ...
+    await upload(
+      path.join(iconsRoot, remainingIcons[i]),
+      `__consvicta-icons/icon-${slot}.svg`,
+    );
+  }
+
+  // Patterns — 13 SVGs derivados do brand book (grid dourado, diagonal,
+  // simbolo watermark, corner frames, hero textures, dots+frame). O
+  // engine carrossel le de __consvicta-patterns/pattern-{slot}.X com
+  // pesos por slide (ver _SLIDE_PATTERN_WHITELIST).
+  const patternsRoot = "public/consvicta-library/patterns";
+  for (let i = 0; i < CONSVICTA_LIBRARY_PATTERNS.length; i++) {
+    const slot = i + 1;
+    const file = CONSVICTA_LIBRARY_PATTERNS[i];
+    await upload(
+      path.join(patternsRoot, file),
+      `__consvicta-patterns/pattern-${slot}.svg`,
+    );
+  }
+
+  // Fundos — 20 SVGs decorativos (tiffany glow, grafite linhas, grids,
+  // diagonais, gold vertical, circulos concentricos, cantos
+  // decorativos, etc). Engine le de __consvicta-icon-carrossel/
+  // icon-{slot}.X via _icon_for_slide pra usar como background grande
+  // (.icon-bg) de cada slide.
+  const fundosRoot = "public/consvicta-library/fundos";
+  for (let i = 0; i < CONSVICTA_LIBRARY_FUNDOS.length; i++) {
+    const slot = i + 1;
+    const file = CONSVICTA_LIBRARY_FUNDOS[i];
+    await upload(
+      path.join(fundosRoot, file),
+      `__consvicta-icon-carrossel/icon-${slot}.svg`,
     );
   }
 

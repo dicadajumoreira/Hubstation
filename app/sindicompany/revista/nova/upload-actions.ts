@@ -27,7 +27,7 @@ import {
   PATTERN_MAX_SLOTS,
 } from "@/lib/sindicompany/condominios-db";
 
-const ALLOWED_PRESTACAO_EXT = new Set(["jpg", "jpeg", "png", "webp", "pdf"]);
+const ALLOWED_PRESTACAO_EXT = new Set(["jpg", "jpeg", "png", "webp", "pdf", "html"]);
 const ALLOWED_IMG_EXT = new Set(["jpg", "jpeg", "png", "webp"]);
 const ALLOWED_VECTOR_EXT = new Set(["jpg", "jpeg", "png", "webp", "svg"]);
 
@@ -63,7 +63,7 @@ export async function getPrestacaoUploadIntent(
   }
   const e = ext.toLowerCase().replace(/^\./, "");
   if (!ALLOWED_PRESTACAO_EXT.has(e)) {
-    return { ok: false, error: "Extensão precisa ser jpg, png, webp ou pdf." };
+    return { ok: false, error: "Extensão precisa ser jpg, png, webp, pdf ou html." };
   }
   if (!condominio) return { ok: false, error: "Condomínio inválido." };
   try {
@@ -180,8 +180,8 @@ export async function getPatternUploadIntent(
   } catch {
     return { ok: false, error: "Sessao expirada. Faca login de novo." };
   }
-  if (!Number.isInteger(slot) || slot < 1 || slot > 20) {
-    return { ok: false, error: "Slot invalido (1 a 20)." };
+  if (!Number.isInteger(slot) || slot < 1 || slot > 999) {
+    return { ok: false, error: "Slot invalido (1 a 999)." };
   }
   const e = ext.toLowerCase().replace(/^\./, "");
   if (!ALLOWED_IMG_EXT.has(e)) {
@@ -206,7 +206,7 @@ export async function getPatternUploadIntent(
 async function _slotIntent(
   ext: string,
   slot: number,
-  max: number,
+  _max: number,
   label: string,
   create: (s: number, e: string) => Promise<{ token: string; path: string; publicUrl: string }>,
 ): Promise<UploadIntentResult | UploadIntentError> {
@@ -215,8 +215,12 @@ async function _slotIntent(
   } catch {
     return { ok: false, error: "Sessao expirada. Faca login de novo." };
   }
-  if (!Number.isInteger(slot) || slot < 1 || slot > max) {
-    return { ok: false, error: `Slot invalido (1 a ${max}).` };
+  // _max ignorado por design — slots agora sao dinamicos, hard cap em 999
+  // pra cobrir libs grandes (Consvicta tem 86 icones, e o user pode
+  // querer adicionar mais via "+ Novo slot"). Validacao real do tamanho
+  // fica no _listSlotUrls/UI.
+  if (!Number.isInteger(slot) || slot < 1 || slot > 999) {
+    return { ok: false, error: "Slot invalido (1 a 999)." };
   }
   const e = ext.toLowerCase().replace(/^\./, "");
   if (!ALLOWED_VECTOR_EXT.has(e)) {

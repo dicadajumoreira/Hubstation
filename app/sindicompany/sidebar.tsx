@@ -33,6 +33,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: "@consvictabr", href: "/sindicompany/carrossel/novo?brand=consvictabr" },
     ],
   },
+  { label: "Marcas", href: "/sindicompany/marcas", emoji: "🏷️" },
   { label: "Condomínios", href: "/sindicompany/condominios", emoji: "🏢",
     children: [
       { label: "Lista de condomínios", href: "/sindicompany/condominios" },
@@ -41,23 +42,36 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     label: "Assets Sindicompany",
+    href: "/sindicompany/assets",
     emoji: "🎨",
     children: [
-      { label: "Patterns", href: "/sindicompany/patterns" },
-      { label: "Icons", href: "/sindicompany/icons" },
-      { label: "Fundo Carrossel", href: "/sindicompany/icon-carrossel" },
-      { label: "Logotipos", href: "/sindicompany/logos" },
+      { label: "Brand Assets", href: "/sindicompany/assets/brand-assets" },
+      { label: "Social Media", href: "/sindicompany/assets/social-media" },
+      { label: "Visual Library", href: "/sindicompany/assets/visual-library" },
+      { label: "AI Ready Assets", href: "/sindicompany/assets/ai-ready" },
     ],
   },
   {
     label: "Assets BySindicompany",
+    href: "/sindicompany/by-assets",
     emoji: "🪄",
-    children: [{ label: "Patterns · Icons · Fundo · Logos", href: "/sindicompany/by-assets" }],
+    children: [
+      { label: "Brand Assets", href: "/sindicompany/by-assets/brand-assets" },
+      { label: "Social Media", href: "/sindicompany/by-assets/social-media" },
+      { label: "Visual Library", href: "/sindicompany/by-assets/visual-library" },
+      { label: "AI Ready Assets", href: "/sindicompany/by-assets/ai-ready" },
+    ],
   },
   {
     label: "Assets Consvicta",
+    href: "/sindicompany/consvicta-assets",
     emoji: "🌿",
-    children: [{ label: "Patterns · Icons · Fundo · Logos", href: "/sindicompany/consvicta-assets" }],
+    children: [
+      { label: "Brand Assets", href: "/sindicompany/consvicta-assets/brand-assets" },
+      { label: "Social Media", href: "/sindicompany/consvicta-assets/social-media" },
+      { label: "Visual Library", href: "/sindicompany/consvicta-assets/visual-library" },
+      { label: "AI Ready Assets", href: "/sindicompany/consvicta-assets/ai-ready" },
+    ],
   },
 ];
 

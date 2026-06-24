@@ -27,9 +27,11 @@ import re
 import sys
 import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
+from api import brand_kit
 from api.supabase_client import _client as _sb_client
 from api.text_gen import _client as _openai_client, MODEL, _gerar_json
 
@@ -37,6 +39,45 @@ from api.text_gen import _client as _openai_client, MODEL, _gerar_json
 # Marca do carrossel atual — setada em main() antes de qualquer
 # lookup de asset. Define qual conjunto de buckets/handle/logo usar.
 _BRAND = "sindicompanybr"
+
+# Arquetipo de capa do Brand Hub Sindicompany 2026-05-17. Setado em
+# gerar_carrossel() a partir do campo carrosseis.cover_archetype.
+# Vazio = usa o fallback da env var SINDICOMPANY_COVER_ARCHETYPE
+# (legado) ou a capa classica se a env nao estiver setada.
+_COVER_ARCHETYPE = ""
+
+# Formato do carrossel (mito_verdade, historia_real...). Setado em
+# gerar_carrossel; usado pelos arquetipos de capa que renderizam a tarja
+# de FORMATO (ex: foto-editorial), ja que a assinatura das funcoes de
+# arquetipo nao recebe o formato.
+_FORMATO = ""
+
+# Estilo de paginacao do slide (dots/ticks/bar/index), escolhido UMA vez
+# por carrossel em gerar_carrossel pra variar entre carrosseis. Vazio = dots.
+_PAGINATION_STYLE = ""
+
+# Estilo de capa (classic/house), escolhido por carrossel. "house" so
+# aplica quando ha foto de capa (Sindicompany). Vazio = classic.
+_CAPA_STYLE = ""
+
+# Seed do carrossel (id) — usada pra variar a decoracao de pattern por slide.
+_CARROSSEL_SEED = ""
+
+# Cor do pattern do carrossel (navy/beige/purple) — varia o feed.
+_PATTERN_COLOR = "navy"
+
+# Identidade da marca atual, vinda da tabela `marcas`. Setadas em
+# gerar_carrossel() a partir do slug. Para as 3 marcas chumbadas
+# (sindicompanybr/bysindicompany/consvictabr) prefixo e handle continuam
+# vindo das funcoes hardcoded; estes globais so sao usados por MARCA NOVA.
+_BRAND_PALETTE: dict[str, str] | None = None
+_BRAND_PREFIX = ""  # bucket_prefix do DB (ex: __minhamarca-)
+_BRAND_HANDLE = ""  # handle do DB (ex: @minhamarca)
+_BRAND_NAME = ""  # nome de exibicao do DB (ex: Lavandery)
+# Tipografia data-driven da marca (coluna marcas.tipografia). Só usada por
+# marca nova — as 3 chumbadas seguem com as fontes embutidas. Shape:
+# {"display","body","numeric","faces":[{family,weight,style,file}, ...]}
+_BRAND_TIPOGRAFIA: dict[str, Any] | None = None
 
 
 def _asset_prefix() -> str:
@@ -48,7 +89,11 @@ def _asset_prefix() -> str:
         return "__by-"
     if _BRAND == "consvictabr":
         return "__consvicta-"
-    return "__"
+    if _BRAND == "sindicompanybr":
+        return "__"
+    # Marca nova: prefixo do cadastro (tabela marcas). Fallback defensivo
+    # __<slug>- igual ao default que o cadastro grava.
+    return _BRAND_PREFIX or f"__{_BRAND}-"
 
 
 def _handle() -> str:
@@ -56,7 +101,22 @@ def _handle() -> str:
         return "@bysindicompany"
     if _BRAND == "consvictabr":
         return "@consvictabr"
-    return "@sindicompanybr"
+    if _BRAND == "sindicompanybr":
+        return "@sindicompanybr"
+    return _BRAND_HANDLE or f"@{_BRAND}"
+
+
+def _brand_label() -> str:
+    """Nome de exibicao da marca (ex: badge do CTA). 3 marcas chumbadas
+    mantem o rotulo exato; marca nova usa o nome do cadastro, caindo no
+    handle sem @ ou no slug."""
+    if _BRAND == "bysindicompany":
+        return "By Sindicompany"
+    if _BRAND == "consvictabr":
+        return "Consvicta"
+    if _BRAND == "sindicompanybr":
+        return "Sindicompany"
+    return _BRAND_NAME or _handle().lstrip("@") or _BRAND
 
 
 _PATTERNS_CACHE: list[str] | None = None  # data URLs prontos pra uso
@@ -79,7 +139,7 @@ def _patterns_data_urls() -> list[str]:
         return out
 
     for i in range(1, 21):
-        for ext in ("png", "jpg", "jpeg", "webp"):
+        for ext in ("svg", "png", "jpg", "jpeg", "webp"):
             url = (
                 f"{base}/storage/v1/object/public/"
                 f"condominios-fotos/{_asset_prefix()}patterns/pattern-{i}.{ext}"
@@ -135,13 +195,35 @@ def _patterns_shuffled() -> list[str]:
     return base
 
 
-def _pattern_for_slide(slide_idx: int) -> str:
+def _pattern_for_slide(slide_idx: int, *, is_cta: bool = False, is_capa: bool = False) -> str:
     """Devolve uma data URL ciclando entre patterns aleatorizados pelo
     indice do slide, ou string vazia se nenhum pattern existir.
 
     Whitelist por slide: certos slides so podem usar patterns
     especificos (curadoria da marca). Pra esses, sorteia um do
-    whitelist. Pra os demais, usa o shuffle global."""
+    whitelist. Pra os demais, usa o shuffle global.
+
+    Consvicta: curadoria por tom de fundo do slide. Capa+CTA sao
+    escuros (onix) -> patterns dark (slots 2/4/6/9/12/13). Slides
+    internos cycling entre tons claros -> patterns light (slots
+    1/3/5/7/8/10/11)."""
+    if _BRAND == "consvictabr":
+        # Slides escuros (capa onix-gradient ou CTA onix) -> patterns dark
+        dark_slots = [2, 4, 6, 9, 12, 13]
+        # Slides claros (mint/sand/lavender/white/gray_5) -> patterns light
+        light_slots = [1, 3, 5, 7, 8, 10, 11]
+        target = dark_slots if (is_cta or is_capa) else light_slots
+        shuffled = list(target)
+        random.shuffle(shuffled)
+        for slot in shuffled:
+            url = _pattern_slot_data_url(slot)
+            if url:
+                return url
+        # Bucket vazio? cai no shuffle global (que tambem vai vir
+        # vazio se nada foi uploaded, devolvendo "")
+        pats = _patterns_shuffled()
+        return pats[(slide_idx - 1) % len(pats)] if pats else ""
+
     allowed = _SLIDE_PATTERN_WHITELIST.get(slide_idx)
     if allowed:
         # Embaralha os slots permitidos e devolve o primeiro que
@@ -183,7 +265,7 @@ def _pattern_slot_data_url(slot: int) -> str:
     if not base:
         _PATTERN_SLOT_CACHE[slot] = ""
         return ""
-    for ext in ("png", "jpg", "jpeg", "webp"):
+    for ext in ("svg", "png", "jpg", "jpeg", "webp"):
         url = (
             f"{base}/storage/v1/object/public/"
             f"condominios-fotos/{_asset_prefix()}patterns/pattern-{slot}.{ext}"
@@ -218,6 +300,7 @@ _ICONS_LIST_CACHE: list[str] | None = None
 _ICON_SLOT_CACHE: dict[int, str] = {}
 _LOGO_SLOT_CACHE: dict[int, str] = {}
 _CONSVICTA_FONTS_CSS_CACHE: str | None = None
+_SINDICOMPANY_FONTS_CSS_CACHE: str | None = None
 
 # Biblioteca de icones Consvicta (86 SVGs). Cache em memoria por processo.
 # Estrutura: {nome_sem_ext: svg_string}. Carrega lazily na primeira chamada.
@@ -437,6 +520,132 @@ def _consvicta_fonts_css() -> str:
     return _CONSVICTA_FONTS_CSS_CACHE
 
 
+def _sindicompany_fonts_css() -> str:
+    """CSS @font-face com Provicali (.otf, 400) + Epilogue Variable
+    (.woff2, 100-900 normal/italic) embutidos em base64. Arquivo em
+    api/assets/fonts/sindicompany/. Cache por processo. String vazia
+    se nao encontrar — engine cai pro fallback Epilogue do Google
+    Fonts."""
+    global _SINDICOMPANY_FONTS_CSS_CACHE
+    if _SINDICOMPANY_FONTS_CSS_CACHE is not None:
+        return _SINDICOMPANY_FONTS_CSS_CACHE
+    here = os.path.dirname(os.path.abspath(__file__))
+    css_path = os.path.join(
+        here, "assets", "fonts", "sindicompany", "sindicompany-fonts-inline.css"
+    )
+    try:
+        with open(css_path, "r", encoding="utf-8") as f:
+            _SINDICOMPANY_FONTS_CSS_CACHE = f.read()
+        print(
+            f"[carrossel] sindicompany-fonts-inline.css carregado "
+            f"({len(_SINDICOMPANY_FONTS_CSS_CACHE)//1024} KB)",
+            flush=True,
+        )
+    except Exception as e:  # noqa: BLE001
+        print(
+            f"[carrossel] sindicompany-fonts-inline.css nao encontrado: {e}",
+            flush=True,
+        )
+        _SINDICOMPANY_FONTS_CSS_CACHE = ""
+    return _SINDICOMPANY_FONTS_CSS_CACHE
+
+
+_BRAND_FONTS_CACHE: dict[str, tuple[str, str, str, str] | None] = {}
+
+
+def _font_format(file: str) -> str:
+    f = file.lower()
+    if f.endswith(".woff2"):
+        return "woff2"
+    if f.endswith(".woff"):
+        return "woff"
+    if f.endswith(".otf"):
+        return "opentype"
+    return "truetype"
+
+
+def _font_mime(file: str) -> str:
+    f = file.lower()
+    if f.endswith(".woff2"):
+        return "font/woff2"
+    if f.endswith(".woff"):
+        return "font/woff"
+    if f.endswith(".otf"):
+        return "font/otf"
+    return "font/ttf"
+
+
+def _brand_fonts_from_tipografia() -> tuple[str, str, str, str] | None:
+    """Monta (head_fonts, font_display, font_body, font_numeric) a partir da
+    tipografia data-driven (_BRAND_TIPOGRAFIA), baixando cada arquivo de fonte
+    do bucket ({prefixo}fonts/) e embutindo em base64 como @font-face. Devolve
+    None se nao houver tipografia utilizavel ou se nenhum arquivo carregar —
+    aí o caller cai nas fontes embutidas. Cache por marca/processo."""
+    if _BRAND in _BRAND_FONTS_CACHE:
+        return _BRAND_FONTS_CACHE[_BRAND]
+
+    tip = _BRAND_TIPOGRAFIA
+    faces = tip.get("faces") if isinstance(tip, dict) else None
+    base = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    if not isinstance(faces, list) or not faces or not base:
+        _BRAND_FONTS_CACHE[_BRAND] = None
+        return None
+
+    prefix = _asset_prefix()
+    blocks: list[str] = []
+    for f in faces:
+        if not isinstance(f, dict):
+            continue
+        file = str(f.get("file") or "").strip()
+        family = str(f.get("family") or "").strip()
+        if not file or not family:
+            continue
+        weight = f.get("weight") or 400
+        style = f.get("style") or "normal"
+        url = (
+            f"{base}/storage/v1/object/public/"
+            f"condominios-fotos/{prefix}fonts/{urllib.parse.quote(file)}"
+        )
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "carrossel-engine/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                if resp.status != 200:
+                    continue
+                content = resp.read()
+            b64 = base64.b64encode(content).decode("ascii")
+            blocks.append(
+                "@font-face{"
+                f"font-family:'{family}';"
+                f"font-style:{style};"
+                f"font-weight:{weight};"
+                "font-display:swap;"
+                f"src:url(data:{_font_mime(file)};base64,{b64}) "
+                f"format('{_font_format(file)}');"
+                "}"
+            )
+            print(
+                f"[carrossel] fonte {file} embutida ({len(content)//1024} KB)",
+                flush=True,
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[carrossel] fonte {file} falhou: {e}", flush=True)
+            continue
+
+    if not blocks:
+        _BRAND_FONTS_CACHE[_BRAND] = None
+        return None
+
+    head = f"<style>{''.join(blocks)}</style>"
+    fd = str(tip.get("display") or "").strip() or "system-ui, sans-serif"
+    fb = str(tip.get("body") or "").strip() or "system-ui, sans-serif"
+    fn = str(tip.get("numeric") or "").strip() or fb
+    result = (head, fd, fb, fn)
+    _BRAND_FONTS_CACHE[_BRAND] = result
+    return result
+
+
 def _logo_slot_data_url(slot: int) -> str:
     """Devolve data URL do logo em __logos/logo-{slot}.X. Cache por
     slot. String vazia se nao houver."""
@@ -609,9 +818,105 @@ def _icons_all_data_urls() -> list[str]:
     return out
 
 
-def _icon_for_slide(slide_idx: int) -> str:
+# Slots dos 20 fundos no bucket __consvicta-icon-carrossel/ separados
+# por tom dominante do SVG. Light = fundo predominantemente claro
+# (cream/off-white), funciona em slides claros (mint/sand/lavender/
+# white/gray_5). Dark = fundo predominantemente escuro (ink/grafite/
+# gradient escuro), funciona em capa + CTA (onix). Tons mistos vao
+# pro pool DARK por seguranca (10 split, 15 linhas dark, etc).
+_CONSVICTA_FUNDO_LIGHT_SLOTS = [6, 14, 19]  # offwhite-elegante, moldura-interna, gold-edge
+_CONSVICTA_FUNDO_DARK_SLOTS = [
+    1, 2, 3, 4, 5, 7, 8, 9, 11, 12, 13, 15, 16, 17, 18, 20
+]
+
+
+def _consvicta_fundo_for_slide(slide_idx: int, *, is_cta: bool, is_capa: bool) -> str:
+    """Pega um fundo curado pelo tom do slide. Roda apos garantir que
+    o bucket __consvicta-icon-carrossel/ tem assets uploaded. Se algum
+    slot estiver vazio, pula pra o proximo do pool. Sem assets, volta
+    "" e o caller cai no fallback (logo simbolo)."""
+    # Slide tom: capa+CTA escuros (onix), internos claros
+    is_dark = is_cta or is_capa
+    pool = _CONSVICTA_FUNDO_DARK_SLOTS if is_dark else _CONSVICTA_FUNDO_LIGHT_SLOTS
+    # Cycla pelo pool por slide_idx pra cada slide ter um fundo diferente
+    # (mod sobre o tamanho do pool, nao do total de 20)
+    if not pool:
+        return ""
+    # Tenta o slot ideal primeiro, depois fallback pros vizinhos
+    start = (slide_idx - 1) % len(pool)
+    for offset in range(len(pool)):
+        slot = pool[(start + offset) % len(pool)]
+        url = _consvicta_fundo_slot_data_url(slot)
+        if url:
+            return url
+    return ""
+
+
+_CONSVICTA_FUNDO_SLOT_CACHE: dict[int, str] = {}
+
+
+def _consvicta_fundo_slot_data_url(slot: int) -> str:
+    """Baixa o fundo do bucket __consvicta-icon-carrossel/icon-{slot}.X
+    e cacheia por slot. String vazia se nao houver."""
+    if slot in _CONSVICTA_FUNDO_SLOT_CACHE:
+        return _CONSVICTA_FUNDO_SLOT_CACHE[slot]
+    base = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    if not base:
+        _CONSVICTA_FUNDO_SLOT_CACHE[slot] = ""
+        return ""
+    for ext in ("svg", "png", "webp", "jpg", "jpeg"):
+        url = (
+            f"{base}/storage/v1/object/public/"
+            f"condominios-fotos/__consvicta-icon-carrossel/icon-{slot}.{ext}"
+        )
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "carrossel-engine/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                if resp.status != 200:
+                    continue
+                content = resp.read()
+                ctype = (
+                    resp.headers.get("Content-Type", "image/svg+xml")
+                    .split(";")[0]
+                    .strip()
+                )
+            b64 = base64.b64encode(content).decode("ascii")
+            url_str = f"data:{ctype};base64,{b64}"
+            _CONSVICTA_FUNDO_SLOT_CACHE[slot] = url_str
+            return url_str
+        except urllib.error.HTTPError:
+            continue
+        except Exception:  # noqa: BLE001
+            break
+    _CONSVICTA_FUNDO_SLOT_CACHE[slot] = ""
+    return ""
+
+
+def _icon_for_slide(slide_idx: int, *, is_cta: bool = False, is_capa: bool = False) -> str:
     """Mapeia: slot 1 -> slide 2, slot 2 -> slide 3, etc.
-    Capa (slide_idx 1) NAO recebe Fundo Carrossel — retorna vazio."""
+    Capa (slide_idx 1) NAO recebe Fundo Carrossel — retorna vazio.
+
+    Excecao Consvicta: capa E todos os slides recebem fundo curado
+    pelo tom (light pra internos claros, dark pra capa+CTA). Se o
+    bucket __consvicta-icon-carrossel/ estiver vazio, usa o logo
+    simbolo (slot 2 de __consvicta-logos) como fallback decorativo
+    pra preencher visualmente o slide (a opacity baixa do .icon-bg
+    suaviza o efeito)."""
+    if _BRAND == "consvictabr":
+        # Picker curado por tom (light/dark) — vai DIRETO no slot
+        # certo do bucket em vez de pegar da lista geral. Ja faz
+        # cycling dentro do pool do tom certo.
+        url = _consvicta_fundo_for_slide(
+            slide_idx, is_cta=is_cta, is_capa=is_capa
+        )
+        if url:
+            return url
+        # Bucket vazio? Fallback: logo simbolo como brand reinforcement
+        sym = _logo_slot_data_url(2)
+        return sym or ""
+    # Outras marcas: comportamento original (capa sem fundo)
     icons = _icons_all_data_urls()
     if not icons or slide_idx < 2:
         return ""
@@ -621,13 +926,25 @@ BUCKET = "condominios-fotos"
 SLIDE_W = 3072
 SLIDE_H = 3839  # 4:5 vertical
 
+# Paleta oficial Sindicompany — Brand Hub 2026-05-17
+# (Navy/Cyan/Beige/Lavender/Purple/White). Mantém as chaves antigas
+# (onix/mint/sand/lavender/white/gray_5) pra compatibilidade com o
+# template HTML — só os valores HEX trocam.
+#  - onix     -> Navy (texto/fundos principais)
+#  - mint     -> Cyan (acento, confiança)
+#  - sand     -> Beige (calor, humano)
+#  - lavender -> Lavender novo (inovação, tech)
+#  - purple   -> Purple novo (profundidade, IA) — nova chave opcional
+#  - white    -> White puro
+#  - gray_5   -> Paper warm (substitui o gray_5 frio antigo)
 PALETTE = {
-    "onix": "#1A1C29",
-    "mint": "#84C7D3",
-    "sand": "#DABDA9",
-    "lavender": "#B8C0FF",
+    "onix": "#182028",       # Navy
+    "mint": "#88C8D0",       # Cyan
+    "sand": "#E0B098",       # Beige
+    "lavender": "#BFC0FF",   # Lavender
+    "purple": "#8890D0",     # Purple (nova — Brand Hub 2026-05-17)
     "white": "#FFFFFF",
-    "gray_5": "#F4F4F5",
+    "gray_5": "#FAF7F2",     # Paper
 }
 
 # Paleta oficial Consvicta (Brand Book). Mapeia para as mesmas chaves
@@ -653,8 +970,141 @@ PALETTE_CONSVICTA = {
 
 
 def _palette() -> dict[str, str]:
-    """Paleta ativa conforme a marca."""
-    return PALETTE_CONSVICTA if _BRAND == "consvictabr" else PALETTE
+    """Paleta ativa da marca. Base chumbada (compat das 3 marcas atuais)
+    sobreposta pelos valores do DB (marcas.paleta), quando houver. O merge
+    garante que toda chave que o template usa exista mesmo se o DB so
+    trouxer parte das cores (marca nova herda as chaves que faltam)."""
+    base = PALETTE_CONSVICTA if _BRAND == "consvictabr" else PALETTE
+    if _BRAND_PALETTE:
+        return {**base, **_BRAND_PALETTE}
+    return base
+
+
+def _rel_lum(hexc: str) -> float:
+    """Luminancia relativa (WCAG) de um hex #rrggbb. 0=preto, 1=branco."""
+    h = (hexc or "").lstrip("#")
+    if len(h) != 6:
+        return 0.0
+    try:
+        r, g, b = (int(h[i : i + 2], 16) / 255 for i in (0, 2, 4))
+    except ValueError:
+        return 0.0
+
+    def lin(c: float) -> float:
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+
+
+def _contrast(a: str, b: str) -> float:
+    """Razao de contraste WCAG entre duas cores (1 a 21)."""
+    la, lb = _rel_lum(a), _rel_lum(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _adjust_for_contrast(color: str, bg: str, target: float) -> str:
+    """Escurece (fundo claro) ou clareia (fundo escuro) a cor ate atingir
+    o contraste alvo no fundo, mantendo o tom. Pra paletas pastel, em que
+    nenhuma cor cromatica contrasta sozinha em fundo claro."""
+    h = color.lstrip("#")
+    if len(h) != 6:
+        return color
+    r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
+    darken = _rel_lum(bg) > 0.35
+    for _ in range(24):
+        cur = f"#{r:02x}{g:02x}{b:02x}"
+        if _contrast(cur, bg) >= target:
+            return cur
+        if darken:
+            r, g, b = int(r * 0.85), int(g * 0.85), int(b * 0.85)
+        else:
+            r, g, b = (
+                r + int((255 - r) * 0.15),
+                g + int((255 - g) * 0.15),
+                b + int((255 - b) * 0.15),
+            )
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+def _pick_title_color(bg: str, fg: str, p: dict[str, str]) -> str:
+    """Cor do TITULO, distinta da cor do corpo (fg), pra criar hierarquia
+    cromatica em TODO slide. Escolhe a cor cromatica da marca com melhor
+    contraste no fundo; se nenhuma chega a 3:1 (paleta pastel em fundo
+    claro), escurece/clareia a melhor delas ate ficar legivel. So cai em
+    fg se a marca nao tiver nenhuma cor cromatica. Vale pra qualquer paleta."""
+    cands = [
+        c
+        for c in (p.get(k) for k in ("mint", "purple", "sand", "lavender"))
+        if c and c.lower() != bg.lower()
+    ]
+    if not cands:
+        return fg
+    cands.sort(key=lambda c: _contrast(c, bg), reverse=True)
+    best = cands[0]
+    if _contrast(best, bg) >= 3.0:
+        return best
+    return _adjust_for_contrast(best, bg, 4.0)
+
+
+def _fetch_marca(slug: str) -> dict[str, Any] | None:
+    """Le a marca do Supabase (paleta, bucket_prefix, handle, nome) numa
+    query. Qualquer falha (marca ausente, erro de rede) cai em None ->
+    identidade chumbada. Zero regressao independente do estado do banco."""
+    try:
+        sb = _sb_client()
+        res = (
+            sb.table("marcas")
+            .select("paleta, bucket_prefix, handle, nome")
+            .eq("slug", slug)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        return rows[0] if rows else None
+    except Exception as e:  # noqa: BLE001 — fallback proposital
+        print(f"[carrossel] marca do DB indisponivel ({e}); usando chumbada", flush=True)
+        return None
+
+
+def _paleta_from_marca(marca: dict[str, Any] | None) -> dict[str, str] | None:
+    """Extrai a paleta (str->str) da marca, descartando lixo. None se vazia."""
+    if not marca:
+        return None
+    paleta = marca.get("paleta")
+    if isinstance(paleta, dict) and paleta:
+        return {
+            str(k): str(v)
+            for k, v in paleta.items()
+            if isinstance(v, str) and v.strip()
+        }
+    return None
+
+
+def _fetch_marca_tipografia(slug: str) -> dict[str, Any] | None:
+    """Le marcas.tipografia (jsonb). Query SEPARADA de _fetch_marca de
+    proposito: se a coluna ainda nao existir (migration nao rodada), so a
+    tipografia fica indisponivel — paleta/prefixo/handle seguem normais.
+    None = sem fontes proprias -> engine usa as embutidas."""
+    try:
+        sb = _sb_client()
+        res = (
+            sb.table("marcas")
+            .select("tipografia")
+            .eq("slug", slug)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            return None
+        tip = rows[0].get("tipografia")
+        if isinstance(tip, dict) and tip.get("faces"):
+            return tip
+        return None
+    except Exception as e:  # noqa: BLE001 — fallback proposital
+        print(f"[carrossel] tipografia do DB indisponivel ({e})", flush=True)
+        return None
 
 
 # =============================================================================
@@ -723,15 +1173,20 @@ def _upload_slides_zip(
 # eh injetado no prompt.
 FORMATO_INSTRUCOES = {
     "historia_real": (
-        "FORMATO: HISTORIA REAL (o que mais engaja e salva).\n"
-        "- De NOME ao personagem (Renata, Lucas, Carlos), nunca 'um morador'.\n"
-        "- Detalhes concretos: '6 kg', '4 horas', '23%', 'Ap. 8B'.\n"
-        "- A historia tem virada: setup -> conflito -> descoberta -> resolucao.\n"
-        "- Personagens/situacoes podem ser compostos. NUNCA invente condominios/enderecos reais.\n"
-        "ESTRUTURA: 1(capa) hook no momento de tensao maxima, sem resolver. "
-        "2 quem e o personagem e o problema. 3 o erro que quase aconteceu. "
-        "4 a virada. 5 o resultado concreto com numero. "
-        "ultimo CTA 'Voce ja passou por isso? Comenta SIM ou NAO'."
+        "FORMATO: HISTORIA REAL (a formula que mais engaja — 2o maior viral da conta).\n"
+        "- De um NOME PROPRIO brasileiro ao personagem, variando a cada roteiro (nunca use sempre o mesmo nome), nunca 'um morador'. Use detalhes concretos pra dar credibilidade. NUNCA cite numero de apartamento/unidade nem nome de condominio.\n"
+        "- VARIE A CADA POST (regra CRITICA — nao vire um cliche): invente uma historia NOVA, com evento dramatico, desfecho e NUMEROS diferentes. NAO use sempre uma votacao/assembleia com placar — alterne entre renuncia, demissao de funcionario antigo, obra polemica, multa contestada, reforma, troca de administradora, saida de morador, etc. invente valores proprios e plausiveis a cada post; NUNCA reaproveite numeros de um post anterior, e quando houver placar/percentual, que seja sempre outro.\n"
+        "- CONFLITO MORAL (o coracao do post): NAO pode ter vilao obvio. Coloque DUAS coisas legitimas em tensao (ex: alguem querido X o que o condominio precisava). Deixe explicito que 'sao coisas diferentes'.\n"
+        "- FINAL AMBIGUO: mostre o CUSTO HUMANO junto do resultado. Algo melhorou, MAS algo se perdeu — ninguem 'venceu' limpo. A ambiguidade e o que gera o debate.\n"
+        "- Personagens/situacoes podem ser compostos. NUNCA cite nome de condominio (real ou inventado), endereco, nem numero de unidade/apartamento.\n"
+        "ESTRUTURA (arco da historia): "
+        "1(capa) personagem + evento dramatico DESTE post, sem resolver, + tarja FORMATO. "
+        "2 A SITUACAO: quem e o personagem e a tensao por baixo. "
+        "3 O QUE NINGUEM FALAVA: o problema oculto; o conflito moral aflora. "
+        "4 A VIRADA: o que aconteceu e o FINAL AMBIGUO (o que ganhou E o que doeu). "
+        "5 O RESULTADO: numeros concretos depois (INVENTE valores plausiveis e DIFERENTES a cada post), em lista quando couber. "
+        "ultimo (CTA) PERGUNTA DE POSICIONAMENTO que OBRIGA a escolher um lado, com as DUAS opcoes tiradas do DILEMA DESTA historia (nao de exemplos prontos). "
+        "Marque a acao curta entre [[ ]] e legende cada lado em 1 linha."
     ),
     "lista": (
         "FORMATO: LISTA (educativo, pontos equivalentes).\n"
@@ -743,13 +1198,19 @@ FORMATO_INSTRUCOES = {
         "ultimo CTA 'Qual voce nao sabia? Comenta o numero aqui'."
     ),
     "mito_verdade": (
-        "FORMATO: MITO VS VERDADE (crencas erradas difundidas).\n"
-        "- Sempre em PARES: Mito num slide, Verdade no seguinte.\n"
-        "- O mito precisa SOAR RAZOAVEL. A verdade precisa ser ESPECIFICA (cite artigo/REsp).\n"
-        "- MAXIMO 3 pares.\n"
-        "ESTRUTURA: 1(capa) 'Voce acredita em algum desses mitos sobre condominio?'. "
-        "2,3 Mito1->Verdade1. 4,5 Mito2->Verdade2. tipo dos slides: 'mito' / 'verdade'. "
-        "ultimo CTA 'Qual mito voce acreditava? Comenta aqui'."
+        "FORMATO: MITO VS VERDADE (mito juridico universalmente vivido — a formula que MAIS viralizou).\n"
+        "- FOQUE EM UM UNICO MITO, desenvolvido a fundo. NUNCA varios pares rasos de mito/verdade.\n"
+        "- O mito tem que ser uma CRENCA que quase todo mundo ja assumiu como obvia — pode ser sobre o sindico, um morador, uma regra ou a convivencia (ex: 'o sindico tem obrigacao de resolver, ne?', 'barulho de crianca ninguem pode reclamar', 'se ta na escritura, pode tudo').\n"
+        "- A verdade precisa ser ESPECIFICA: 'a regra/lei diz exatamente o oposto' (cite artigo/REsp quando der).\n"
+        "FORMULA DA CAPA (siga A RISCA — foi o que viralizou): "
+        "(1) uma CENA concreta do dia a dia que todo mundo ja viveu, curtissima e ESPECIFICA do assunto escolhido (varie — NAO use sempre vizinho/barulho); "
+        "(2) a CRENCA obvia em seguida, com uma CONTRADICAO curta (2 a 3 palavras) entre [[ ]] — ex: '[[obrigacao de resolver]]'; "
+        "(3) termine com PERGUNTA BINARIA (sim/nao) — 'ne?', 'certo?'. + tarja FORMATO.\n"
+        "ESTRUTURA (arco de UM mito so): capa -> MITO (enuncia a crenca errada) -> O PROBLEMA (consequencia real) -> "
+        "VERDADE (o que a regra realmente diz, especifico) -> O QUE FAZER (passos praticos, lista numerada) -> CTA. "
+        "tipo dos slides: 'mito' / 'verdade'. "
+        "CTA (ultimo): frase de CONTRADICAO memoravel ('Sindico bom nao resolve tudo. Ele resolve o que e dele resolver.') + "
+        "PERGUNTA BINARIA, terminando com '[[Comenta SIM ou NAO]]'."
     ),
     "antes_depois": (
         "FORMATO: ANTES / DEPOIS (resultado tangivel de gestao profissional).\n"
@@ -785,7 +1246,109 @@ FORMATO_INSTRUCOES = {
         "2 o problema que motivou (dado/situacao). 3 argumento 1. 4 o contra-argumento + resposta. "
         "5 argumento 2 e consequencia pratica. ultimo CTA 'Concorda ou discorda? Comenta CONCORDO ou DISCORDO'."
     ),
+    "hook_punch": (
+        "FORMATO: HOOK PUNCH (o mais agressivo — para o scroll na hora).\n"
+        "- Frases CURTAS e fortes, poucas palavras por slide, ritmo rapido, tensao alta. Cada slide e um soco.\n"
+        "- Nada de explicacao longa: impacto emocional progressivo, um golpe por slide. Varios slides tipo 'frase'.\n"
+        "- Use verdade humana e palavras magneticas. Capa: a frase mais forte possivel, max 6 palavras."
+    ),
+    "pov": (
+        "FORMATO: POV (identificacao extrema, 'isso sou eu').\n"
+        "- Capa comeca com 'POV:' + situacao MUITO especifica e reconhecivel (ex: 'POV: voce abriu o grupo do condominio as 22h').\n"
+        "- Tom cinematografico, presente, 2a pessoa ('voce...'). Escalada emocional ate uma verdade humana.\n"
+        "- Objetivo: 'sou eu / e alguem que conheco' -> marcar/compartilhar. CTA de identificacao ou compartilhamento."
+    ),
+    "tweet": (
+        "FORMATO: TWEET STYLE (frase curta, printavel, repostavel).\n"
+        "- Cada slide e uma frase de efeito que funciona SOZINHA (observacao humana, verdade incomoda, indireta). Leitura instantanea.\n"
+        "- Quase todos os slides sao tipo 'frase' (limpo/centralizado). Nada de paragrafo. 1 ideia por slide.\n"
+        "- Pensado pra print/repost e branding. CTA leve de compartilhamento."
+    ),
+    "expectativa_realidade": (
+        "FORMATO: EXPECTATIVA VS REALIDADE (humor + identificacao).\n"
+        "- Capa apresenta a EXPECTATIVA idealizada; os slides mostram a REALIDADE absurda/caotica, com humor leve.\n"
+        "- Contraste forte e identificavel. Otimo pra meme. Fechamento com reflexao leve. CTA de compartilhamento."
+    ),
+    "erro_fatal": (
+        "FORMATO: ERRO FATAL (medo de errar).\n"
+        "- Capa nomeia O erro que custa caro (ex: 'O erro que destroi assembleias').\n"
+        "- Mostra a consequencia, AMPLIFICA o prejuizo, entrega a solucao pratica. Ativa medo + utilidade. CTA de salvar."
+    ),
+    "bastidor": (
+        "FORMATO: BASTIDOR REAL (documental, humaniza).\n"
+        "- Mostra o bastidor real (visita tecnica, reuniao dificil, vistoria) + um DETALHE INVISIVEL que so quem vive percebe.\n"
+        "- Tom de quem esta dentro, percepcao premium. Termina em reflexao/frase forte. CTA de identificacao ou autoridade."
+    ),
+    "camada_invisivel": (
+        "FORMATO: CAMADA INVISIVEL (profundidade emocional).\n"
+        "- Parte de uma situacao comum e revela a CAMADA emocional escondida (ex: 'muita reclamacao nasce do cansaco').\n"
+        "- Provoca o 'nunca pensei nisso'. Verdade humana + frase memoravel. CTA emocional/de compartilhamento."
+    ),
+    "dialogo": (
+        "FORMATO: DIALOGO (conversa).\n"
+        "- Troca curta de falas entre dois personagens, falantes nomeados no inicio (ex: body 'Morador: Mas e rapidinho.' / proximo 'Sindico: Todo problema comeca com rapidinho.').\n"
+        "- Escalada emocional e PUNCH na ultima fala. Leitura rapida, humana. Nao citar condominio/unidade. CTA de identificacao."
+    ),
+    "desabafo": (
+        "FORMATO: DESABAFO CONTROLADO (emocional, intimo).\n"
+        "- Mostra a dor/pressao real de quem gere — vulnerabilidade CONTROLADA, sem vitimismo.\n"
+        "- Tom intimo, humano, de quem entende por dentro; cria comunidade (ex: 'Tem dia que o sindico so queria desligar o celular.'). Termina em reflexao/frase forte. CTA emocional."
+    ),
+    "escalada": (
+        "FORMATO: A ESCALADA (tensao crescente, cinematografico).\n"
+        "- Comeca numa situacao simples e PIORA a cada slide (caos crescente) ate um pico, depois reflexao final.\n"
+        "- Cada slide eleva a tensao do anterior; prende ate o fim. Use micro-tensao. CTA de debate ou identificacao."
+    ),
 }
+
+
+# Esqueleto emocional por nº de slides. RESPIRO = slide tipo 'frase';
+# ultimo slide = sempre CTA. O FORMATO/tema encaixa dentro do arco.
+_ESTRUTURA_POR_SLIDES: dict[int, str] = {
+    5: "1 Gancho reconhecivel (cena/personagem concreto vivido) · 2 A crenca (o que todo mundo acha) · 3 A rachadura + a virada (verdade incomoda, com ancora) · 4 O custo / o que fazer · 5 CTA de posicionamento (escolha um lado)",
+    6: "1 Gancho reconhecivel · 2 A crenca / a situacao · 3 A rachadura (o que ninguem fala) · 4 A virada (verdade incomoda + ancora) · 5 O custo / o que fazer · 6 CTA de posicionamento",
+    7: "1 Gancho reconhecivel · 2 A crenca · 3 A rachadura · 4 Micro-tensao (abre loop) · 5 A virada (verdade incomoda + ancora) · 6 O custo / o que fazer · 7 CTA de posicionamento",
+    8: "1 Gancho reconhecivel · 2 A crenca · 3 A rachadura · 4 A virada (verdade incomoda + ancora) · 5 RESPIRO (tipo 'frase') · 6 O custo / o que fazer · 7 Frase memoravel · 8 CTA de posicionamento",
+    9: "1 Gancho reconhecivel · 2 Contexto/cena · 3 A crenca · 4 A rachadura · 5 Micro-tensao · 6 A virada (verdade incomoda + ancora) · 7 O custo / o que fazer · 8 Frase memoravel · 9 CTA de posicionamento",
+    10: "1 Gancho reconhecivel · 2 Contexto/personagem · 3 A crenca · 4 A rachadura · 5 Micro-tensao · 6 A virada (verdade incomoda + ancora) · 7 RESPIRO (tipo 'frase') · 8 O custo / o que fazer · 9 Frase memoravel (manifesto) · 10 CTA de posicionamento",
+}
+
+# Pool de ASSUNTOS de conflito condominial. Um e injetado por geracao como
+# SEMENTE pra evitar que o modelo caia sempre no mesmo (ex: 'vizinho
+# barulhento') quando o tema e generico ('historias de condominio', 'mitos e
+# verdades'). Cada chamada e stateless. Tema especifico continua mandando.
+_ASSUNTOS_CONFLITO = [
+    "cachorro que late o dia inteiro",
+    "fezes de pet nao recolhidas na area comum",
+    "vaga de garagem usada por quem nao devia",
+    "reforma fora do horario permitido",
+    "obra sem autorizacao do condominio",
+    "inadimplencia e o rateio que sobra pros outros",
+    "cobranca de taxa extra polemica",
+    "disputa pelo salao de festas / churrasqueira",
+    "uso da piscina fora das regras",
+    "mudanca no fim de semana / fora de hora",
+    "fumaca de cigarro que invade o ape vizinho",
+    "vazamento entre unidades e quem paga o conserto",
+    "lixo deixado no corredor",
+    "bicicleta ou patinete no elevador social",
+    "cameras e privacidade dos moradores",
+    "aluguel por temporada (Airbnb) no predio",
+    "vaga de visitante sempre ocupada",
+    "brigas no grupo de WhatsApp do condominio",
+    "prestacao de contas questionada na assembleia",
+    "conselho contra o sindico",
+    "troca de administradora",
+    "demissao do zelador antigo",
+    "ar-condicionado ou antena instalado na fachada",
+    "planta que pinga na varanda de baixo",
+    "crianca brincando na garagem ou areas de circulacao",
+    "morador que estaciona em local proibido",
+    "acesso de entregador / delivery na portaria",
+    "festa que varou a madrugada",
+    "animal de grande porte no elevador",
+    "estendimento de roupa na janela / fachada",
+]
 
 
 def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
@@ -801,6 +1364,8 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
     formato = (carrossel.get("formato") or "historia_real").strip()
     briefing = (carrossel.get("briefing") or "").strip()
     objetivo = (carrossel.get("objetivo") or "").strip()
+    assunto_sugerido = random.choice(_ASSUNTOS_CONFLITO)
+    variacao_seed = "".join(random.choice("abcdefghijklmnopqrstuvwxyz0123456789") for _ in range(6))
 
     formato_label = formato.replace("_", " ")
     instrucoes_formato = FORMATO_INSTRUCOES.get(
@@ -811,9 +1376,11 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
     is_by = _BRAND == "bysindicompany"
     is_consvicta = _BRAND == "consvictabr"
     obj_map_sindico = {
-        "comentarios": "OBJETIVO: GERAR COMENTARIOS. CTA SEMPRE binario (SIM/NAO, "
-        "CONCORDO/DISCORDO, MORADOR CERTO/SINDICO CERTO). Tema com dois lados "
-        "defensaveis. Ultimo slide nomeia os dois lados. Sucesso = debate, nao alcance.",
+        "comentarios": "OBJETIVO: GERAR COMENTARIOS. CTA que gera DEBATE, coerente "
+        "com a emocao — opiniao forte, posicionamento ou dilema (ex: 'Isso e "
+        "convivencia ou abuso?', 'Ate onde vai o limite?', 'O problema comeca em "
+        "quem?'). Binario SIM/NAO so quando a discussao for de fato binaria; nao "
+        "repita sempre. Tema com dois lados defensaveis. Sucesso = debate, nao alcance.",
         "salvamentos": "OBJETIVO: GERAR SALVAMENTOS. Conteudo util e confiavel, "
         "linguagem objetiva. Ancore lei/artigo/numero. CTA 'Salva esse post' / "
         "'Manda no grupo do condominio'. Nunca CTA de debate.",
@@ -933,8 +1500,27 @@ def _gerar_copy(carrossel: dict[str, Any]) -> dict[str, Any]:
         f"A ASSINATURA '{assinatura}' aparece SO na legenda, nunca nos slides. "
         f"Use a estrutura de slides do FORMATO acima; a voz aqui e o tom de cada slide.\n\n"
         f"REGRAS GERAIS:\n"
-        f"- Capa: o tema '{tema}' aparece literal ou em parafrase clara. Capa inteira (titulo + body) tem no max 20 palavras.\n"
+        f"- TEMA = CATEGORIA, NUNCA ROTEIRO PRONTO: o tema '{tema}' e so a BASE. A CADA novo carrossel, escolha um RECORTE especifico e DIFERENTE dentro do tema, pra que dois posts do mesmo tema nunca saiam iguais. Ex: tema 'barulho' -> barulho de cachorro, de crianca correndo, de salto no piso, de festa, de reforma, de movel arrastado, de TV alta. Evite o recorte mais obvio. Se o tema JA for um recorte especifico, traga uma SITUACAO nova dentro dele.\n"
+        f"- SEMENTE DE VARIACAO (use pra fugir do padrao e escolher um recorte menos obvio, diferente do que voce geraria por default): {variacao_seed}. Se o tema estiver vazio ou muito generico ('historias de condominio', 'mitos e verdades', 'polemicas de predio'), puxe pra um conflito condominial concreto como: {assunto_sugerido} (so uma semente — varie a cada post).\n"
+        f"- O CONFLITO NAO PRECISA GIRAR EM TORNO DO SINDICO: pode ser morador x morador, vizinho x vizinho, morador x regra/convivencia, condomino x area comum. O sindico (ou a gestao) entra SO quando a situacao pedir naturalmente — nunca force o sindico como protagonista.\n"
+        f"- Capa: NUNCA escreva o tema '{tema}' como titulo nem o repita literalmente — o tema e so o ASSUNTO que guia o conteudo, nao vira texto do slide. A capa entra DIRETO no gancho. Capa inteira (titulo + body) tem no max 20 palavras.\n"
+        f"- HOOK DA CAPA (prioridade maxima): o titulo da capa e a frase que PARA O SCROLL — verdade incomoda, identificacao, tensao ou curiosidade. Curto, leitura instantanea no celular. NUNCA slogan corporativo ou frase que comeca devagar.\n"
+        f"- DESTAQUE DO HOOK: envolva o trecho MAIS FORTE do hook (2 a 5 palavras) entre [[ ]] — ex: 'WhatsApp [[nao e assembleia]].'. So no titulo da capa.\n"
+        f"- ANCORAS DE ATENCAO (retencao): nos slides de conteudo, marque com [[ ]] no BODY no maximo 1 trecho de alto impacto por slide (+1 secundario no maximo) — verdade incomoda, identificacao, tensao, frase memoravel ou PALAVRA MAGNETICA (caos, silencio, pressao, desgaste, autoridade, conflito, refem, invisivel, bastidor, premium, processo, improviso, abandono, controle, presenca, sobrecarga, suporte, confianca, clareza, metodo, crise). NUNCA mais de 2 por slide.\n"
+        f"- CTA DE POSICIONAMENTO (formula campea — vale pra TODO formato): o ULTIMO slide SEMPRE forca o leitor a TOMAR UM LADO e comentar — e o que mais viraliza. De DUAS opcoes concretas e carregadas, SEMPRE tiradas do PROPRIO conteudo deste post (nunca genericas, nunca de exemplos prontos), e peca o voto: binario ('[[Comenta SIM ou NAO]]') ou de lado (uma pergunta 'Voce faria A ou B?' + a acao '[[Comenta A ou B]]' + 1 linha curta legendando cada lado). Marque entre [[ ]] APENAS a ACAO (2 a 5 palavras), nunca uma frase inteira. VARIE a pergunta e as opcoes a cada post. NUNCA termine so com frase memoravel. So em post claramente utilitario (modelo/script, checklist) vale trocar por '[[Salva esse post]]'/'[[Manda no grupo]]' — mas o DEFAULT e escolher um lado. PROIBIDO o CTA preguicoso 'Concorda?'/'O que acha?' SEM dois lados concretos.\n"
+        f"- ESTRUTURA (FORMULA CAMPEA — siga este esqueleto, encaixando o FORMATO/tema): {_ESTRUTURA_POR_SLIDES.get(n_slides, 'Gancho reconhecivel -> a crenca (o que todo mundo acha) -> a rachadura (o que ninguem fala) -> a virada (verdade incomoda + ancora) -> o custo/o que fazer -> CTA de posicionamento')}. O motor de TODO post: pega uma crenca que o publico tem, mostra com cena/personagem concreto que ela esta errada ou e mais complexa, e forca o leitor a tomar posicao. Slides RESPIRO usam tipo 'frase'. Alterne o tom (tensao, identificacao, reflexao); nunca o mesmo por varios slides. Use MINI PLOT TWIST quando couber.\n"
+        f"- VOZ HUMANA: frases falaveis, ritmo oral, sem juridiques nem academiques. EFEITO ESPELHO: ao menos 1 frase que faca pensar 'isso sou eu'. AUTORIDADE INVISIVEL: nunca dizer 'somos referencia'; a autoridade aparece na clareza e na observacao humana.\n"
+        f"- IMPERFEICAO HUMANA: nao soe polido demais o tempo todo. Use frases secas, curtas, quebradas quando couber ('E ai comeca o problema.', 'E isso pesa.'). Parece escrito por alguem de DENTRO, nao por IA.\n"
+        f"- DENSIDADE VARIAVEL: nunca todos os slides igualmente carregados. Emocional/memoravel/respiro = pouco texto; tecnico = mais. O ritmo segura a leitura.\n"
         f"- Cada slide interno: tipo + titulo (3-7 palavras) + body (1-3 frases curtas, max 35 palavras).\n"
+        f"- MICRO-TENSAO (retencao entre slides): os slides do MEIO terminam com um gancho que puxa o proximo (curiosidade, tensao, continuacao), nunca 100% fechados. Marque a frase de tensao/cliffhanger entre ~~ ~~ (vira SUBLINHADO, distinto do grifo do [[ ]]) — ex: '~~Mas o problema comeca depois.~~'. Evite explicacao tecnica continua e slides conclusivos no meio. So o ULTIMO slide (CTA) e a frase final memoravel podem fechar.\n"
+        f"- VERDADE HUMANA (o que MAIS viraliza): condominio e comportamento humano. Prefira observacoes reais da vida que facam pensar 'isso e MUITO verdade' a explicacao tecnica. Ex: 'O problema raramente comeca no problema.', 'Sindico forte tambem cansa.', 'O grupo do WhatsApp muda o comportamento das pessoas.'.\n"
+        f"- ABERTURA: depois do hook, o slide 2 entra DIRETO na emocao/situacao/conflito — nunca introducao corporativa, 'texto de palestra' ou explicacao lenta.\n"
+        f"- GATILHO DE COMPARTILHAMENTO: construa pensando 'por que alguem mandaria isso pra outra pessoa?'. Ative ao menos um: indireta social, identificacao ('isso sou eu'), 'finalmente alguem falou', alerta, status/inteligencia ou pertencimento.\n"
+        f"- FRASE PRINTAVEL + INDIRETA SOCIAL: inclua ao menos 1 frase digna de print/repost, forte e memoravel (ex: 'Condominio nao funciona no grito. Funciona no processo.'). Vale a indireta (parece reflexao, e indireta): 'Tem morador que quer regra. Ate a regra chegar nele.'.\n"
+        f"- RESPIRO VISUAL (ritmo): alterne slides densos e leves; NUNCA todos com a mesma densidade. Inclua ao menos 1 slide com tipo 'frase': SO uma frase curta e memoravel, com body vazio — vai num layout limpo e centralizado.\n"
+        f"- SENSACAO EDITORIAL: o carrossel deve parecer revista/manifesto, nao post de marketing generico. Menos texto, mais peso.\n"
+        f"- NUNCA cite numero de apartamento/unidade nem nome de condominio (real ou inventado) em nenhum slide ou legenda.\n"
         f"- Em posts educativos (mito, dado, tutorial, lista juridica): pelo menos UMA ancora — artigo (ex: 'Codigo Civil, art. 1.336'), decisao judicial (ex: 'STJ, REsp 1.699.022/SP, 2019') OU dado com fonte nomeada e datada.\n"
         f"{contexto}"
         f"{anti_leak}\n"
@@ -1021,6 +1607,16 @@ FORMATO_LABELS = {
     "dado_choca": "Dado que Choca",
     "tutorial": "Tutorial Rápido",
     "opiniao": "Opinião Forte",
+    "hook_punch": "Hook Punch",
+    "pov": "POV",
+    "tweet": "Tweet",
+    "expectativa_realidade": "Expectativa vs Realidade",
+    "erro_fatal": "Erro Fatal",
+    "bastidor": "Bastidor Real",
+    "camada_invisivel": "Camada Invisível",
+    "dialogo": "Diálogo",
+    "desabafo": "Desabafo",
+    "escalada": "A Escalada",
 }
 
 
@@ -1029,6 +1625,5322 @@ def _formato_label(formato: str) -> str:
     valor desconhecido, faz best-effort trocando _ por espaco."""
     f = (formato or "").strip().lower()
     return FORMATO_LABELS.get(f, f.replace("_", " ").title() or "Carrossel")
+
+
+_SC_NAVY = "#182028"
+_SC_CYAN = "#88C8D0"
+_SC_BEIGE = "#E0B098"
+_SC_LAVENDER = "#BFC0FF"
+_SC_PURPLE = "#8890D0"
+_SC_PAPER = "#FAF7F2"
+_SC_PAPER_WARM = "#F2EDE5"
+
+
+def _extract_stat(titulo: str) -> tuple[str, str]:
+    """Tenta destacar um numero/percent/multiplicador do titulo pros
+    arquetipos "Stat slap" e "Numbered guide". Devolve (num, resto).
+    Casos: "87% aprovam" -> ("87%", "aprovam"); "3x mais" ->
+    ("3x", "mais"); "Pintura nova" -> ("", "Pintura nova")."""
+    m = re.search(r"\d{1,4}(?:[.,]\d+)?\s*(?:%|x|X)?", titulo)
+    if not m:
+        return ("", titulo)
+    num = m.group(0).replace(" ", "")
+    resto = (titulo[: m.start()] + titulo[m.end():]).strip()
+    resto = re.sub(r"\s+", " ", resto).strip(" .,-—–")
+    return (num, resto)
+
+
+def _capa_editorial_question(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — arquetipo de capa "Editorial Question".
+
+    Duas variantes selecionadas automaticamente conforme presenca de
+    foto_capa_url:
+
+    1. SEM FOTO (minimalista): Fundo Paper, faixa Beige no topo,
+       titulo Epilogue 800 com fracao italic Purple + roman Navy,
+       simbolo Sindicompany no canto inferior direito, handle Cyan.
+
+    2. COM FOTO ("Editorial Photo"): Foto ocupa metade superior
+       (45% da altura). Faixa Beige fina (4%) separa foto e bloco
+       de texto. Metade inferior em fundo Paper com pergunta italic
+       Purple + roman Navy. Simbolo pequeno no canto inferior direito.
+
+    Paleta hardcoded das constantes Brand Hub (nao usa _palette()
+    legacy). Mantem logo_top_img no topo pra consistencia com os
+    outros slides do mesmo carrossel. Aplica so pras marcas Sindicompany
+    (sindicompanybr + bysindicompany), nunca Consvicta.
+    """
+    NAVY = _SC_NAVY
+    CYAN = _SC_CYAN
+    BEIGE = _SC_BEIGE
+    PURPLE = _SC_PURPLE
+    PAPER = _SC_PAPER
+    PAPER_WARM = _SC_PAPER_WARM
+
+    # Simbolo Sindicompany no canto inferior direito. Pegamos um logo
+    # menor (slot 2 ou 3) e filtramos pra Navy via CSS. Vazio se nao
+    # houver upload — slide funciona sem.
+    symbol_url = _logo_slot_data_url(2) or _logo_slot_data_url(3) or ""
+    symbol_img = (
+        f'<img class="corner-symbol" src="{symbol_url}" alt="" />'
+        if symbol_url
+        else ""
+    )
+
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+
+    # Split do titulo: a primeira sentenca/frase ate o "?" ganha
+    # destaque italic Purple; o resto fica em Navy roman. Best-effort
+    # pra qualquer titulo (se nao tiver "?", titulo inteiro vai roman).
+    titulo_h = _h(titulo)
+    if "?" in titulo_h:
+        head, _, tail = titulo_h.partition("?")
+        titulo_render = (
+            f'<span class="q">{head}?</span>'
+            f'<span class="rest">{tail.strip()}</span>'
+            if tail.strip()
+            else f'<span class="q">{head}?</span>'
+        )
+    else:
+        titulo_render = f'<span class="rest">{titulo_h}</span>'
+
+    has_photo = bool(foto_capa_url)
+
+    # === Variante COM FOTO ===
+    if has_photo:
+        return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {PAPER};
+    color: {NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .photo {{
+    /* Foto ocupa 45% do topo — proporcao editorial classica do
+       Brand Hub (foto grande mas deixa metade pra respiro). */
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 45%;
+    background-image: url('{foto_capa_url}');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 0;
+  }}
+  .divider {{
+    /* Faixa Beige fina (4%) entre foto e bloco de texto. */
+    position: absolute; left: 0; right: 0;
+    top: 45%; height: 4%;
+    background: linear-gradient(180deg, {BEIGE} 0%, {PAPER_WARM} 100%);
+    z-index: 1;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) invert(1);
+  }}
+  .content {{
+    /* Bloco de texto na metade inferior, abaixo da divider. */
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 53%; bottom: 220px;
+    display: flex; flex-direction: column; justify-content: center;
+    z-index: 2;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 220px;
+    line-height: 0.98;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }}
+  .capa-titulo .q {{
+    color: {PURPLE};
+    font-style: italic;
+    font-weight: 800;
+  }}
+  .capa-titulo .rest {{
+    color: {NAVY};
+    display: block;
+    margin-top: 0.15em;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 78px;
+    line-height: 1.30;
+    color: {NAVY};
+    opacity: 0.78;
+    margin-top: 60px;
+    max-width: 28ch;
+  }}
+  .corner-symbol {{
+    /* Simbolo menor na variante com foto (deixa o texto respirar). */
+    position: absolute;
+    bottom: 80px; right: 180px;
+    width: 320px; height: 320px;
+    object-fit: contain;
+    z-index: 1;
+    filter: brightness(0) saturate(100%);
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {NAVY};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  <div class="photo"></div>
+  <div class="divider"></div>
+  <div class="content">
+    <h1 class="capa-titulo">{titulo_render}</h1>
+    {body_html}
+  </div>
+  {symbol_img}
+  {logo_top_img}
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+    # === Variante SEM FOTO (minimalista) ===
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {PAPER};
+    color: {NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .top-band {{
+    /* Faixa quente de 8% no topo — assina o arquetipo Editorial. */
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 8%;
+    background: linear-gradient(180deg, {BEIGE} 0%, {PAPER_WARM} 100%);
+    z-index: 0;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 18%; bottom: 28%;
+    display: flex; flex-direction: column; justify-content: center;
+    z-index: 2;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 280px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }}
+  .capa-titulo .q {{
+    color: {PURPLE};
+    font-style: italic;
+    font-weight: 800;
+  }}
+  .capa-titulo .rest {{
+    color: {NAVY};
+    display: block;
+    margin-top: 0.15em;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 92px;
+    line-height: 1.30;
+    color: {NAVY};
+    opacity: 0.78;
+    margin-top: 80px;
+    max-width: 26ch;
+  }}
+  .corner-symbol {{
+    position: absolute;
+    bottom: 80px; right: 180px;
+    width: 640px; height: 640px;
+    object-fit: contain;
+    z-index: 1;
+    filter: brightness(0) saturate(100%);
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 72px;
+    font-weight: 600;
+    color: {CYAN};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  <div class="top-band"></div>
+  <div class="content">
+    <h1 class="capa-titulo">{titulo_render}</h1>
+    {body_html}
+  </div>
+  {symbol_img}
+  {logo_top_img}
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_stat_slap(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",  # nao usada — capa sem foto por design
+) -> str:
+    """Brand Hub 2026-05-17 — capa 03 "Stat slap".
+
+    Numero gigante (extraido do titulo) ocupando o centro, fundo Beige
+    quente, resto do titulo + body abaixo. Se o titulo nao tiver numero,
+    cai num layout "first word giant" usando a primeira palavra do
+    titulo como protagonista visual."""
+    del foto_capa_url
+    num, resto = _extract_stat(titulo)
+    if not num:
+        parts = titulo.strip().split(" ", 1)
+        num = parts[0]
+        resto = parts[1] if len(parts) > 1 else ""
+    body_html = f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    resto_html = (
+        f'<p class="resto">{_h(resto)}</p>' if resto else ""
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_BEIGE};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .stat {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 26%;
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 1400px;
+    line-height: 0.82;
+    letter-spacing: -0.05em;
+    color: {_SC_NAVY};
+    text-align: left;
+    z-index: 2;
+  }}
+  .resto {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 520px;
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 180px;
+    line-height: 0.98;
+    letter-spacing: -0.02em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+    z-index: 2;
+  }}
+  .capa-body {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 320px;
+    font-family: {font_body};
+    font-size: 78px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    max-width: 28ch;
+    z-index: 2;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  <div class="stat">{_h(num)}</div>
+  {resto_html}
+  {body_html}
+  {logo_top_img}
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_numbered_guide(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 04 "Numbered guide".
+
+    Split vertical: numero grande Navy na esquerda (50%), headline +
+    body Navy na direita (50%) sobre fundo Paper. Numero vem do
+    titulo via _extract_stat; fallback "01" se o titulo nao tiver
+    numero (caso comum em guia "passo a passo")."""
+    del foto_capa_url
+    num, resto = _extract_stat(titulo)
+    if not num:
+        num = "01"
+        resto = titulo
+    body_html = f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .left {{
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 50%;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2;
+  }}
+  .num {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 1500px;
+    line-height: 0.82;
+    letter-spacing: -0.06em;
+    color: {_SC_NAVY};
+  }}
+  .right {{
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 50%;
+    padding: 0 180px 0 60px;
+    display: flex; flex-direction: column; justify-content: center;
+    z-index: 2;
+  }}
+  .resto {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 220px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 78px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    margin-top: 60px;
+    max-width: 24ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  <div class="left"><div class="num">{_h(num)}</div></div>
+  <div class="right">
+    <h1 class="resto">{_h(resto)}</h1>
+    {body_html}
+  </div>
+  {logo_top_img}
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_manifesto(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 05 "Manifesto".
+
+    Tipografia gigante italic sobre fundo Cyan. Headline em peso 800
+    italic ocupa quase a tela toda, body Navy menor abaixo. Sem
+    enfeite, sem foto — a frase eh o evento."""
+    del foto_capa_url
+    body_html = f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_CYAN};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 20%; bottom: 26%;
+    display: flex; flex-direction: column; justify-content: center;
+    z-index: 2;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-style: italic;
+    font-size: 320px;
+    line-height: 0.94;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 88px;
+    line-height: 1.28;
+    color: {_SC_NAVY};
+    opacity: 0.82;
+    margin-top: 80px;
+    max-width: 26ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  {logo_top_img}
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_pattern_explosion(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 06 "Pattern explosion".
+
+    Faixa de pattern hero ocupando os 45% superiores, card Paper na
+    base com headline + body. Usa o primeiro pattern disponivel da
+    biblioteca; sem pattern, cai num fundo Lavender flat (mesma silhueta
+    visual, sem quebrar layout)."""
+    del foto_capa_url
+    patterns = _patterns_data_urls()
+    pattern_url = patterns[0] if patterns else ""
+    pattern_top = (
+        f'<div class="pattern-top" style="background-image: url(\'{pattern_url}\')"></div>'
+        if pattern_url
+        else '<div class="pattern-top pattern-fallback"></div>'
+    )
+    body_html = f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .pattern-top {{
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 45%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 0;
+  }}
+  .pattern-fallback {{
+    background: {_SC_LAVENDER};
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) invert(1);
+  }}
+  .card {{
+    position: absolute;
+    left: 0; right: 0;
+    top: 45%; bottom: 0;
+    background: {_SC_PAPER};
+    padding: 140px 180px 220px;
+    display: flex; flex-direction: column; justify-content: center;
+    z-index: 2;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 240px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 82px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    margin-top: 70px;
+    max-width: 28ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  {pattern_top}
+  <div class="card">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  {logo_top_img}
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_headline_only(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 14 "Headline-only".
+
+    Tipografia gigante roman sobre fundo Beige, sem foto, sem ornamento.
+    Mesma logica do Manifesto mas sem italic e em fundo quente."""
+    del foto_capa_url
+    body_html = f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_BEIGE};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 18%; bottom: 26%;
+    display: flex; flex-direction: column; justify-content: center;
+    z-index: 2;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 360px;
+    line-height: 0.92;
+    letter-spacing: -0.03em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 88px;
+    line-height: 1.28;
+    color: {_SC_NAVY};
+    opacity: 0.82;
+    margin-top: 80px;
+    max-width: 26ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  {logo_top_img}
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_dark_premium(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 02 "Dark Premium".
+
+    Foto full-bleed + gradient Navy (transparente no topo → opaco em
+    baixo) + headline branca grande ancorada na base. Sem foto cai num
+    fundo Navy solido com a mesma headline no mesmo lugar."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    if foto_capa_url:
+        photo_layer = (
+            f'<div class="photo" style="background-image: url(\'{foto_capa_url}\')"></div>'
+            '<div class="gradient"></div>'
+        )
+    else:
+        photo_layer = '<div class="solid-navy"></div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_NAVY};
+    color: #ffffff;
+    overflow: hidden;
+    position: relative;
+  }}
+  .photo {{
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 0;
+  }}
+  .solid-navy {{
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: {_SC_NAVY};
+    z-index: 0;
+  }}
+  .gradient {{
+    /* Gradient Navy cobrindo a metade inferior pra texto legivel. */
+    position: absolute; top: 35%; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(180deg,
+      rgba(24,32,40,0.0) 0%,
+      rgba(24,32,40,0.85) 45%,
+      rgba(24,32,40,0.97) 100%);
+    z-index: 1;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) invert(1);
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 280px;
+    z-index: 3;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 260px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 82px;
+    line-height: 1.30;
+    color: #ffffff;
+    opacity: 0.82;
+    margin-top: 60px;
+    max-width: 28ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {photo_layer}
+  {logo_top_img}
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_foto_editorial(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-26 — capa "Foto Editorial".
+
+    Formaliza como arquetipo NOMEADO o layout editorial da capa classica:
+    foto full-bleed + vignette + degrade escuro na metade de baixo, tarja de
+    FORMATO (contorno fino, caixa-alta, tracking largo), titulo branco grande,
+    subtitulo na cor sand e o simbolo da casa no canto inferior direito.
+    Sem foto cai num fundo Navy solido. Le o formato do global _FORMATO pra
+    montar a tarja; o trecho [[...]] do titulo vira destaque cyan."""
+    badge_txt = _formato_label(_FORMATO) if _FORMATO else ""
+    badge_html = (
+        f'<span class="badge">{_h(badge_txt)}</span>' if badge_txt else ""
+    )
+    body_html = f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    if foto_capa_url:
+        photo_layer = (
+            f'<div class="photo" style="background-image: url(\'{foto_capa_url}\')"></div>'
+            '<div class="vignette"></div>'
+            '<div class="overlay"></div>'
+        )
+    else:
+        photo_layer = '<div class="solid-navy"></div><div class="overlay"></div>'
+    house_corner = ""
+    if _BRAND in ("sindicompanybr", "bysindicompany"):
+        _sym = brand_kit.sc_symbol_html(440, _SC_CYAN)
+        if _sym:
+            house_corner = f'<div class="house-corner">{_sym}</div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_NAVY};
+    color: #ffffff;
+    overflow: hidden;
+    position: relative;
+  }}
+  .photo {{
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background-size: cover; background-position: center;
+    background-repeat: no-repeat; z-index: 0;
+  }}
+  .solid-navy {{ position: absolute; inset: 0; background: {_SC_NAVY}; z-index: 0; }}
+  .vignette {{
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(24,32,40,0.45) 100%);
+  }}
+  .overlay {{
+    position: absolute; top: 48%; left: 0; right: 0; bottom: 0; z-index: 1;
+    background: linear-gradient(180deg,
+      rgba(24,32,40,0.0) 0%,
+      rgba(24,32,40,0.86) 20%,
+      rgba(24,32,40,0.97) 100%);
+  }}
+  .logo-top {{
+    position: absolute; top: 100px; left: 180px;
+    width: 720px; max-height: 220px; object-fit: contain; z-index: 5;
+  }}
+  .content {{
+    position: absolute; left: 180px; right: 180px;
+    top: 50%; bottom: 0; z-index: 3;
+    padding: 100px 0 240px;
+    display: flex; flex-direction: column; justify-content: center;
+  }}
+  .badge {{
+    display: inline-block; align-self: flex-start;
+    border: 4px solid rgba(255,255,255,0.65); background: transparent;
+    color: #ffffff; font-family: {font_body}; font-weight: 700;
+    font-size: 64px; letter-spacing: 0.30em; text-transform: uppercase;
+    padding: 28px 56px; border-radius: 10px; margin-bottom: 56px;
+  }}
+  .capa-titulo {{
+    font-family: {font_display}; font-weight: 900; font-size: 257px;
+    line-height: 0.95; letter-spacing: -0.015em; color: #ffffff;
+    text-wrap: balance;
+  }}
+  .hook-hl {{
+    color: {_SC_CYAN};
+    background-image: linear-gradient(transparent 60%, {_SC_CYAN}33 60%);
+    background-repeat: no-repeat;
+  }}
+  .capa-body {{
+    font-family: {font_body}; font-weight: 400; font-size: 132px;
+    line-height: 1.18; color: {_SC_BEIGE}; margin-top: 60px; max-width: 24ch;
+  }}
+  .handle {{
+    position: absolute; bottom: 110px; left: 180px; z-index: 4;
+    font-family: {font_body}; font-weight: 600; font-size: 64px;
+    color: {_SC_CYAN}; letter-spacing: 0.04em;
+  }}
+  .house-corner {{ position: absolute; bottom: 96px; right: 150px; z-index: 2; }}
+</style></head>
+<body>
+  {photo_layer}
+  {logo_top_img}
+  <div class="content">
+    {badge_html}
+    <h1 class="capa-titulo">{_h_hook(titulo, False)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+  {house_corner}
+</body></html>
+"""
+
+
+def _capa_magazine_cover(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 07 "Magazine cover".
+
+    Tres bandas verticais: masthead Navy no topo (~14% altura) com o
+    logo, foto central (~52%) sem corte de rosto, faixa Paper na base
+    (~34%) com headline + body. Sem foto cai num fundo Beige na faixa
+    central, mantendo a estrutura editorial."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    if foto_capa_url:
+        photo_band = (
+            f'<div class="photo-band" style="background-image: url(\'{foto_capa_url}\')"></div>'
+        )
+    else:
+        photo_band = '<div class="photo-band photo-fallback"></div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .masthead {{
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 14%;
+    background: {_SC_NAVY};
+    z-index: 0;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) invert(1);
+  }}
+  .photo-band {{
+    position: absolute; left: 0; right: 0;
+    top: 14%; height: 52%;
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+    z-index: 0;
+  }}
+  .photo-fallback {{
+    background: {_SC_BEIGE};
+  }}
+  .paper-band {{
+    position: absolute; left: 0; right: 0;
+    top: 66%; bottom: 0;
+    background: {_SC_PAPER};
+    padding: 110px 180px 220px;
+    display: flex; flex-direction: column; justify-content: center;
+    z-index: 1;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 220px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 78px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    margin-top: 60px;
+    max-width: 28ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  <div class="masthead"></div>
+  {photo_band}
+  <div class="paper-band">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  {logo_top_img}
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_split_portrait(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 11 "Split portrait".
+
+    Split vertical 45/55: foto retrato a esquerda em 45% da largura,
+    bloco de texto Paper a direita em 55% com headline Navy + body.
+    Sem foto a faixa esquerda vira um fundo Beige solido, mantendo a
+    geometria editorial."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    if foto_capa_url:
+        photo_col = (
+            f'<div class="photo-col" style="background-image: url(\'{foto_capa_url}\')"></div>'
+        )
+    else:
+        photo_col = '<div class="photo-col photo-fallback"></div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .photo-col {{
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 45%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 0;
+  }}
+  .photo-fallback {{
+    background: {_SC_BEIGE};
+  }}
+  .text-col {{
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 55%;
+    padding: 180px 180px 220px 120px;
+    display: flex; flex-direction: column; justify-content: center;
+    z-index: 1;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: calc(45% + 120px);
+    width: calc(55% - 300px); max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 200px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 72px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    margin-top: 60px;
+    max-width: 22ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: calc(45% + 120px);
+    font-family: {font_body};
+    font-size: 60px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  {photo_col}
+  <div class="text-col">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  {logo_top_img}
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_hero_portrait(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 25 "Hero portrait".
+
+    Foto full-bleed cobrindo tudo + tag mono "PERFIL · ED.05" no topo
+    centrada sobre faixa Navy translucida + box Beige ancorada na base
+    com headline Navy. Sem foto: faixa hero vira Navy solido, mantendo
+    tag + box."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    if foto_capa_url:
+        photo_layer = (
+            f'<div class="photo" style="background-image: url(\'{foto_capa_url}\')"></div>'
+        )
+    else:
+        photo_layer = '<div class="photo photo-fallback"></div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_NAVY};
+    color: #ffffff;
+    overflow: hidden;
+    position: relative;
+  }}
+  .photo {{
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 0;
+  }}
+  .photo-fallback {{
+    background: {_SC_NAVY};
+  }}
+  .tag-bar {{
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 11%;
+    background: rgba(24,32,40,0.65);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2;
+  }}
+  .tag {{
+    font-family: {font_body};
+    font-size: 60px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #ffffff;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) invert(1);
+  }}
+  .beige-box {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 220px;
+    background: {_SC_BEIGE};
+    padding: 120px 110px;
+    z-index: 3;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 200px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 72px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.82;
+    margin-top: 50px;
+    max-width: 26ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: #ffffff;
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {photo_layer}
+  <div class="tag-bar"><span class="tag">PERFIL · {_brand_label().upper()}</span></div>
+  {logo_top_img}
+  <div class="beige-box">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_avatar_quote(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 33 "Avatar quote".
+
+    Fundo Paper, aspas Beige gigantes no topo, citacao italic Navy
+    (body) ocupando o meio, avatar circular pequeno + atribuicao
+    (titulo) na base. Sem foto: avatar vira um circulo Beige solido
+    mantendo o ritmo visual."""
+    avatar_bg = (
+        f"background-image: url('{foto_capa_url}'); background-size: cover; background-position: center;"
+        if foto_capa_url
+        else f"background: {_SC_BEIGE};"
+    )
+    quote_text = body or titulo
+    attribution = (
+        f'<div class="attribution">{_h(titulo)}</div>'
+        if body and titulo
+        else ""
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .marks {{
+    position: absolute;
+    top: 460px; left: 180px;
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 820px;
+    line-height: 0.7;
+    color: {_SC_BEIGE};
+    z-index: 1;
+    pointer-events: none;
+  }}
+  .quote {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 36%;
+    font-family: {font_display};
+    font-style: italic;
+    font-weight: 500;
+    font-size: 200px;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+    z-index: 2;
+  }}
+  .avatar-row {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 320px;
+    display: flex; align-items: center;
+    z-index: 3;
+  }}
+  .avatar {{
+    width: 280px; height: 280px;
+    border-radius: 50%;
+    background-repeat: no-repeat;
+    flex-shrink: 0;
+    {avatar_bg}
+  }}
+  .attribution {{
+    margin-left: 60px;
+    font-family: {font_body};
+    font-weight: 600;
+    font-size: 76px;
+    line-height: 1.20;
+    color: {_SC_NAVY};
+    letter-spacing: -0.01em;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  <div class="marks">&ldquo;</div>
+  {logo_top_img}
+  <div class="quote">{_h(quote_text)}</div>
+  <div class="avatar-row">
+    <div class="avatar"></div>
+    {attribution}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_photo_circle(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 38 "Foto circular".
+
+    Fundo Paper. Foto recortada num circulo grande CENTRALIZADO no topo
+    do slide (~2200px de diametro), com a imagem sempre centralizada
+    dentro do circulo (background-position: center center). Texto
+    inferior esquerdo com headline grande Navy + body. Sem foto:
+    circulo vira Beige solido, preservando a geometria."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    circle_style = (
+        f"background-image: url('{foto_capa_url}'); background-size: cover; background-position: center center;"
+        if foto_capa_url
+        else f"background: {_SC_BEIGE};"
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .photo-circle {{
+    position: absolute;
+    top: 420px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2200px; height: 2200px;
+    border-radius: 50%;
+    {circle_style}
+    box-shadow: 0 60px 120px rgba(24,32,40,0.18);
+    z-index: 1;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .content {{
+    position: absolute;
+    left: 180px;
+    right: 180px;
+    bottom: 320px;
+    text-align: center;
+    z-index: 3;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 200px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 72px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.82;
+    margin-top: 50px;
+    max-width: 28ch;
+    margin-left: auto; margin-right: auto;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 50%;
+    transform: translateX(-50%);
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  <div class="photo-circle"></div>
+  {logo_top_img}
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_pull_quote(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 10 "Pull quote".
+
+    Fundo Paper. Par de aspas Beige gigantes no topo, citacao italic
+    Navy (body, ou titulo se body vazio) ocupando o centro, atribuicao
+    mono na base. Capa sem foto por design."""
+    del foto_capa_url
+    quote_text = body or titulo
+    attribution_text = titulo if body else ""
+    attribution_html = (
+        f'<div class="attribution">— {_h(attribution_text)}</div>'
+        if attribution_text
+        else ""
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .marks {{
+    position: absolute;
+    top: 380px; left: 160px;
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 1100px;
+    line-height: 0.7;
+    color: {_SC_BEIGE};
+    z-index: 1;
+    pointer-events: none;
+  }}
+  .quote {{
+    position: absolute;
+    left: 220px; right: 220px;
+    top: 40%;
+    font-family: {font_display};
+    font-style: italic;
+    font-weight: 500;
+    font-size: 240px;
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+    z-index: 2;
+  }}
+  .attribution {{
+    position: absolute;
+    left: 220px;
+    bottom: 320px;
+    font-family: {font_body};
+    font-weight: 600;
+    font-size: 72px;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  <div class="marks">&ldquo;</div>
+  {logo_top_img}
+  <div class="quote">{_h(quote_text)}</div>
+  {attribution_html}
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_glow_hero(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 23 "Glow hero".
+
+    Fundo Navy, simbolo Sindicompany gigante no centro com dois glows
+    radiais atras (Cyan + Beige). Headline Branca abaixo do simbolo,
+    body sutil. Capa sem foto por design."""
+    del foto_capa_url
+    symbol_url = (
+        _logo_slot_data_url(2)
+        or _logo_slot_data_url(3)
+        or _logo_slot_data_url(1)
+        or ""
+    )
+    symbol_img = (
+        f'<img class="hero-symbol" src="{symbol_url}" alt="" />'
+        if symbol_url
+        else '<div class="hero-symbol-fallback"></div>'
+    )
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_NAVY};
+    color: #ffffff;
+    overflow: hidden;
+    position: relative;
+  }}
+  .glow-a {{
+    position: absolute;
+    top: 18%; left: 50%;
+    transform: translateX(-50%);
+    width: 2200px; height: 2200px;
+    border-radius: 50%;
+    background: radial-gradient(circle, {_SC_CYAN} 0%, rgba(136,200,208,0) 60%);
+    opacity: 0.55;
+    filter: blur(80px);
+    z-index: 1;
+    pointer-events: none;
+  }}
+  .glow-b {{
+    position: absolute;
+    top: 22%; left: 50%;
+    transform: translateX(-50%);
+    width: 1600px; height: 1600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, {_SC_BEIGE} 0%, rgba(224,176,152,0) 65%);
+    opacity: 0.45;
+    filter: blur(60px);
+    z-index: 2;
+    pointer-events: none;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) invert(1);
+  }}
+  .hero-symbol {{
+    position: absolute;
+    top: 22%; left: 50%;
+    transform: translateX(-50%);
+    width: 1100px; height: 1100px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    z-index: 3;
+  }}
+  .hero-symbol-fallback {{
+    position: absolute;
+    top: 28%; left: 50%;
+    transform: translateX(-50%);
+    width: 800px; height: 800px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    border: 4px solid rgba(255,255,255,0.18);
+    z-index: 3;
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 320px;
+    text-align: center;
+    z-index: 4;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 240px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 78px;
+    line-height: 1.30;
+    color: #ffffff;
+    opacity: 0.78;
+    margin-top: 50px;
+    max-width: 28ch;
+    margin-left: auto;
+    margin-right: auto;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 50%;
+    transform: translateX(-50%);
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 5;
+  }}
+</style></head>
+<body>
+  <div class="glow-a"></div>
+  <div class="glow-b"></div>
+  {symbol_img}
+  {logo_top_img}
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_versus(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 09 "Versus".
+
+    Fundo Paper. Comparativo erro vs acerto em duas linhas: pilula
+    vermelha "ERRADO" + texto riscado, depois pilula Cyan "CERTO" +
+    texto Navy. Headline (titulo) acima como provocacao. Body opcional
+    como contexto curto na base. Capa sem foto por design.
+
+    Convencao: o body deve vir no formato "errado | certo" — o pipe
+    separa as duas linhas. Sem pipe, o titulo eh repetido como provocacao
+    e a linha de baixo fica vazia."""
+    del foto_capa_url
+    parts = (body or "").split("|", 1)
+    errado = parts[0].strip() if parts else ""
+    certo = parts[1].strip() if len(parts) > 1 else ""
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .head {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 28%;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 200px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .rows {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 320px;
+    display: flex; flex-direction: column; gap: 60px;
+  }}
+  .row {{
+    display: flex; align-items: center; gap: 50px;
+  }}
+  .pill {{
+    flex-shrink: 0;
+    padding: 24px 50px;
+    border-radius: 999px;
+    font-family: {font_body};
+    font-weight: 800;
+    font-size: 60px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #ffffff;
+  }}
+  .pill-wrong {{ background: #C13F3F; }}
+  .pill-right {{ background: {_SC_CYAN}; color: {_SC_NAVY}; }}
+  .row-text {{
+    font-family: {font_display};
+    font-weight: 600;
+    font-size: 88px;
+    line-height: 1.15;
+    color: {_SC_NAVY};
+  }}
+  .row-text.wrong {{
+    text-decoration: line-through;
+    text-decoration-thickness: 6px;
+    text-decoration-color: rgba(195,63,63,0.7);
+    opacity: 0.6;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="head"><h1 class="capa-titulo">{_h(titulo)}</h1></div>
+  <div class="rows">
+    <div class="row">
+      <span class="pill pill-wrong">Errado</span>
+      <span class="row-text wrong">{_h(errado or "&nbsp;")}</span>
+    </div>
+    <div class="row">
+      <span class="pill pill-right">Certo</span>
+      <span class="row-text">{_h(certo or "&nbsp;")}</span>
+    </div>
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_sticky_note(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 20 "Sticky note".
+
+    Fundo Paper. Card grande Beige levemente rotacionado (-2.5deg)
+    tipo post-it ocupando o centro, com headline Navy bold + body
+    Navy abaixo. Pequena dobra/sombra sugerindo papel. Capa sem foto
+    por design."""
+    del foto_capa_url
+    body_html = (
+        f'<p class="note-body">{_h(body)}</p>' if body else ""
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .note-wrap {{
+    position: absolute;
+    inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2;
+  }}
+  .note {{
+    width: 78%;
+    background: {_SC_BEIGE};
+    padding: 160px 140px;
+    transform: rotate(-2.5deg);
+    box-shadow:
+      0 60px 120px rgba(24,32,40,0.18),
+      0 12px 30px rgba(24,32,40,0.12);
+    position: relative;
+  }}
+  .note::before {{
+    /* Dobra superior esquerda do post-it */
+    content: "";
+    position: absolute;
+    top: 0; left: 0;
+    width: 140px; height: 140px;
+    background: linear-gradient(135deg,
+      rgba(255,255,255,0.45) 0%,
+      rgba(255,255,255,0) 60%);
+    pointer-events: none;
+  }}
+  .note-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 220px;
+    line-height: 0.94;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .note-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 78px;
+    line-height: 1.28;
+    color: {_SC_NAVY};
+    opacity: 0.82;
+    margin-top: 55px;
+    max-width: 26ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="note-wrap">
+    <div class="note">
+      <h1 class="note-titulo">{_h(titulo)}</h1>
+      {body_html}
+    </div>
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_photo_banner(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 31 "Photo banner".
+
+    Banda foto top 60% + Paper bottom 40% com headline Navy ancorada
+    no canto inferior esquerdo do bloco de texto e body abaixo dela.
+    Sem foto: banda top fica Beige solida."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    if foto_capa_url:
+        photo_band = (
+            f'<div class="photo-band" style="background-image: url(\'{foto_capa_url}\')"></div>'
+        )
+    else:
+        photo_band = '<div class="photo-band photo-fallback"></div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .photo-band {{
+    position: absolute; left: 0; right: 0; top: 0;
+    height: 60%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 0;
+  }}
+  .photo-fallback {{
+    background: {_SC_BEIGE};
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) invert(1);
+  }}
+  .paper-band {{
+    position: absolute; left: 0; right: 0;
+    top: 60%; bottom: 0;
+    background: {_SC_PAPER};
+    padding: 160px 180px 220px;
+    z-index: 1;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 220px;
+    line-height: 0.95;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 76px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.80;
+    margin-top: 55px;
+    max-width: 28ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  {photo_band}
+  {logo_top_img}
+  <div class="paper-band">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_floating_card(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 42 "Floating card".
+
+    Fundo Navy + glow Beige radial atras. Foto centralizada num card
+    com sombra profunda ocupando ~70% da largura. Headline Branca
+    abaixo do card. Sem foto: card vira Beige solido, mantendo a
+    estrutura visual."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    if foto_capa_url:
+        card_inner = (
+            f'<div class="card-photo" style="background-image: url(\'{foto_capa_url}\')"></div>'
+        )
+    else:
+        card_inner = '<div class="card-photo card-fallback"></div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_NAVY};
+    color: #ffffff;
+    overflow: hidden;
+    position: relative;
+  }}
+  .glow {{
+    position: absolute;
+    top: 18%; left: 50%;
+    transform: translateX(-50%);
+    width: 2400px; height: 2400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, {_SC_BEIGE} 0%, rgba(224,176,152,0) 60%);
+    opacity: 0.40;
+    filter: blur(70px);
+    z-index: 1;
+    pointer-events: none;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) invert(1);
+  }}
+  .card {{
+    position: absolute;
+    top: 16%; left: 50%;
+    transform: translateX(-50%);
+    width: 70%;
+    aspect-ratio: 4 / 5;
+    background: #ffffff;
+    padding: 40px;
+    box-shadow:
+      0 80px 160px rgba(0,0,0,0.50),
+      0 24px 60px rgba(0,0,0,0.35);
+    z-index: 3;
+  }}
+  .card-photo {{
+    width: 100%; height: 100%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }}
+  .card-fallback {{
+    background: {_SC_BEIGE};
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 320px;
+    text-align: center;
+    z-index: 4;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 180px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 68px;
+    line-height: 1.30;
+    color: #ffffff;
+    opacity: 0.78;
+    margin-top: 40px;
+    max-width: 28ch;
+    margin-left: auto; margin-right: auto;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 50%;
+    transform: translateX(-50%);
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 5;
+  }}
+</style></head>
+<body>
+  <div class="glow"></div>
+  <div class="card">{card_inner}</div>
+  {logo_top_img}
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_mythbuster(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 08 "Mythbuster".
+
+    Fundo Paper. Bloco MITO (label Beige) com a crenca incorreta em
+    italic Navy + bloco VERDADE (label Cyan) com a correcao em Navy
+    bold. Titulo opcional como pergunta acima ('verdade ou mito?').
+    Body usa formato 'mito | verdade' (pipe separador). Capa sem
+    foto por design."""
+    del foto_capa_url
+    parts = (body or "").split("|", 1)
+    mito = parts[0].strip() if parts else ""
+    verdade = parts[1].strip() if len(parts) > 1 else ""
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .head {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 24%;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 170px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .blocks {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 320px;
+    display: flex; flex-direction: column; gap: 80px;
+  }}
+  .block {{
+    border-left: 14px solid;
+    padding-left: 60px;
+  }}
+  .block-mito {{ border-color: {_SC_BEIGE}; }}
+  .block-verdade {{ border-color: {_SC_CYAN}; }}
+  .label {{
+    display: inline-block;
+    padding: 18px 40px;
+    border-radius: 8px;
+    font-family: {font_body};
+    font-weight: 800;
+    font-size: 52px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 38px;
+  }}
+  .label-mito {{ background: {_SC_BEIGE}; color: {_SC_NAVY}; }}
+  .label-verdade {{ background: {_SC_CYAN}; color: {_SC_NAVY}; }}
+  .block-text {{
+    font-family: {font_display};
+    font-size: 96px;
+    line-height: 1.10;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .block-text.mito {{
+    font-style: italic;
+    opacity: 0.65;
+  }}
+  .block-text.verdade {{
+    font-weight: 700;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="head"><h1 class="capa-titulo">{_h(titulo)}</h1></div>
+  <div class="blocks">
+    <div class="block block-mito">
+      <span class="label label-mito">Mito</span>
+      <div class="block-text mito">{_h(mito or "&nbsp;")}</div>
+    </div>
+    <div class="block block-verdade">
+      <span class="label label-verdade">Verdade</span>
+      <div class="block-text verdade">{_h(verdade or "&nbsp;")}</div>
+    </div>
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_brackets(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 17 "Brackets".
+
+    Fundo Paper. Colchetes Beige gigantes ancorados nas laterais
+    (left + right), envolvendo a headline Navy bold centralizada.
+    Body opcional Navy mono pequeno abaixo da headline. Capa sem
+    foto por design."""
+    del foto_capa_url
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .bracket {{
+    position: absolute;
+    top: 28%; bottom: 28%;
+    width: 200px;
+    font-family: {font_display};
+    font-weight: 200;
+    font-size: 1400px;
+    line-height: 0.6;
+    color: {_SC_BEIGE};
+    z-index: 1;
+    pointer-events: none;
+    display: flex; align-items: center;
+  }}
+  .bracket-l {{
+    left: 80px;
+  }}
+  .bracket-r {{
+    right: 80px;
+    justify-content: flex-end;
+  }}
+  .content {{
+    position: absolute;
+    left: 320px; right: 320px;
+    top: 30%; bottom: 30%;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    text-align: center;
+    z-index: 3;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 220px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 70px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    margin-top: 50px;
+    max-width: 26ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 50%;
+    transform: translateX(-50%);
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="bracket bracket-l">[</div>
+  <div class="bracket bracket-r">]</div>
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_photo_blur(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 37 "Photo blur".
+
+    Foto full-bleed desfocada como background + camada Navy translucida
+    + headline Branca crisp centralizada. Efeito glassmorphism. Sem
+    foto cai num fundo Navy solido com a headline mantida no centro."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    if foto_capa_url:
+        photo_layer = (
+            f'<div class="photo-blur" style="background-image: url(\'{foto_capa_url}\')"></div>'
+            '<div class="overlay"></div>'
+        )
+    else:
+        photo_layer = '<div class="solid-navy"></div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_NAVY};
+    color: #ffffff;
+    overflow: hidden;
+    position: relative;
+  }}
+  .photo-blur {{
+    position: absolute;
+    top: -100px; left: -100px; right: -100px; bottom: -100px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    filter: blur(80px) saturate(1.05);
+    transform: scale(1.15);
+    z-index: 0;
+  }}
+  .overlay {{
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(24,32,40,0.55);
+    z-index: 1;
+  }}
+  .solid-navy {{
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: {_SC_NAVY};
+    z-index: 0;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) invert(1);
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 50%;
+    transform: translateY(-50%);
+    text-align: center;
+    z-index: 3;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 260px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+    text-wrap: balance;
+    text-shadow: 0 8px 40px rgba(0,0,0,0.35);
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 78px;
+    line-height: 1.30;
+    color: #ffffff;
+    opacity: 0.90;
+    margin-top: 60px;
+    max-width: 28ch;
+    margin-left: auto; margin-right: auto;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 50%;
+    transform: translateX(-50%);
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {photo_layer}
+  {logo_top_img}
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_cinema(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 39 "Cinema".
+
+    Fundo Navy + faixa horizontal central (40% altura, perfeitamente
+    centralizada vertical: 30%-70%) com a foto em formato cinemascope.
+    A imagem fica sempre centralizada dentro da faixa (background-
+    position: center center, background-size: cover). Headline branca
+    acima da faixa, body Cyan abaixo. Sem foto: faixa central vira
+    Beige solida."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    if foto_capa_url:
+        cinema_band = (
+            f'<div class="cinema-band" style="background-image: url(\'{foto_capa_url}\')"></div>'
+        )
+    else:
+        cinema_band = '<div class="cinema-band cinema-fallback"></div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_NAVY};
+    color: #ffffff;
+    overflow: hidden;
+    position: relative;
+  }}
+  .cinema-band {{
+    position: absolute;
+    left: 0; right: 0;
+    top: 30%; height: 40%;
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    z-index: 1;
+  }}
+  .cinema-fallback {{
+    background: {_SC_BEIGE};
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) invert(1);
+  }}
+  .head {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 30%;
+    transform: translateY(-100%);
+    padding-bottom: 80px;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 200px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+    text-wrap: balance;
+  }}
+  .footer {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 220px;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 500;
+    font-size: 70px;
+    line-height: 1.30;
+    color: {_SC_CYAN};
+    max-width: 28ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {cinema_band}
+  {logo_top_img}
+  <div class="head"><h1 class="capa-titulo">{_h(titulo)}</h1></div>
+  <div class="footer">
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_type_tower(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 12 "Type tower".
+
+    Fundo Paper. Palavras da headline empilhadas verticalmente com
+    tamanhos crescentes (do menor pro maior) e tratamentos
+    alternados (regular Navy, italic Navy, bold Cyan, mega Navy).
+    Body opcional Navy pequeno na base. Capa sem foto por design.
+
+    A primeira palavra fica pequena, e cada palavra subsequente
+    cresce em tamanho — o efeito final eh uma 'torre' tipografica
+    crescente. Funciona melhor com 3-5 palavras."""
+    del foto_capa_url
+    words = (titulo or "").split()
+    if not words:
+        words = [""]
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    # 4 tracks de estilo que se repetem
+    sizes = [110, 160, 220, 280]
+    treatments = [
+        "navy-regular",
+        "navy-italic",
+        "cyan-bold",
+        "navy-mega",
+    ]
+    lines = []
+    for i, w in enumerate(words):
+        size = sizes[min(i, len(sizes) - 1)]
+        treat = treatments[i % len(treatments)]
+        lines.append(
+            f'<div class="line {treat}" style="font-size: {size}px;">{_h(w)}</div>'
+        )
+    tower = "\n".join(lines)
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .tower {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex; flex-direction: column;
+    gap: 18px;
+    z-index: 2;
+  }}
+  .line {{
+    font-family: {font_display};
+    line-height: 0.95;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }}
+  .navy-regular {{ color: {_SC_NAVY}; font-weight: 500; }}
+  .navy-italic  {{ color: {_SC_NAVY}; font-weight: 500; font-style: italic; opacity: 0.65; }}
+  .cyan-bold    {{ color: {_SC_CYAN}; font-weight: 800; }}
+  .navy-mega    {{ color: {_SC_NAVY}; font-weight: 800; }}
+  .footer {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 220px;
+    z-index: 3;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 68px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    max-width: 28ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="tower">{tower}</div>
+  <div class="footer">{body_html}</div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_split_color(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 24 "Split color".
+
+    Diagonal split: triangulo Beige cobrindo a metade superior
+    esquerda + triangulo Navy cobrindo a metade inferior direita.
+    Headline grande cruzando o split — palavra 1 sobre Beige
+    (cor Navy), palavra 2 sobre Navy (cor Beige). Capa sem foto
+    por design."""
+    del foto_capa_url
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_BEIGE};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .navy-tri {{
+    /* Triangulo Navy cobrindo a metade inferior direita */
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: {_SC_NAVY};
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+    z-index: 1;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    text-align: center;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 260px;
+    line-height: 0.94;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+    /* Texto fica sobre os dois fundos — usa mix-blend pra inverter
+       cor onde cruza o triangulo Navy */
+    mix-blend-mode: difference;
+    color: #ffffff;
+  }}
+  .footer {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 220px;
+    text-align: right;
+    z-index: 4;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 500;
+    font-size: 72px;
+    line-height: 1.28;
+    color: {_SC_BEIGE};
+    max-width: 26ch;
+    margin-left: auto;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; right: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_BEIGE};
+    letter-spacing: 0.04em;
+    z-index: 5;
+  }}
+</style></head>
+<body>
+  <div class="navy-tri"></div>
+  {logo_top_img}
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+  </div>
+  <div class="footer">{body_html}</div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_polaroid(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 32 "Polaroid".
+
+    Fundo Paper. Foto montada num quadro tipo polaroid (moldura
+    branca grossa, mais grossa embaixo, sombra profunda, rotacao
+    sutil -2deg) centralizada. Caption manuscrita-style abaixo da
+    foto. Headline Navy bold abaixo da polaroid. Sem foto: quadro
+    fica com fundo Beige."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    if foto_capa_url:
+        photo_inner = (
+            f'<div class="polaroid-photo" style="background-image: url(\'{foto_capa_url}\')"></div>'
+        )
+    else:
+        photo_inner = '<div class="polaroid-photo polaroid-fallback"></div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .polaroid-wrap {{
+    position: absolute;
+    top: 14%; left: 50%;
+    transform: translateX(-50%) rotate(-2deg);
+    width: 60%;
+    z-index: 2;
+  }}
+  .polaroid {{
+    background: #ffffff;
+    padding: 60px 60px 220px;
+    box-shadow:
+      0 80px 160px rgba(24,32,40,0.30),
+      0 24px 50px rgba(24,32,40,0.20);
+  }}
+  .polaroid-photo {{
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }}
+  .polaroid-fallback {{
+    background: {_SC_BEIGE};
+  }}
+  .polaroid-caption {{
+    font-family: {font_display};
+    font-style: italic;
+    font-weight: 500;
+    font-size: 78px;
+    color: {_SC_NAVY};
+    text-align: center;
+    margin-top: 50px;
+    opacity: 0.85;
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 280px;
+    text-align: center;
+    z-index: 4;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 170px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 64px;
+    line-height: 1.28;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    margin-top: 40px;
+    max-width: 30ch;
+    margin-left: auto; margin-right: auto;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 50%;
+    transform: translateX(-50%);
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 5;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="polaroid-wrap">
+    <div class="polaroid">
+      {photo_inner}
+    </div>
+  </div>
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_portrait_frame(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 40 "Portrait frame".
+
+    Fundo Paper. Foto montada num quadro tipo retrato em moldura
+    grossa Beige (60px borda) com inner border Navy fino (8px),
+    sombras duplas pra simular profundidade. Tag mono no topo
+    indicando 'EDIÇÃO · MMM YYYY'. Headline + body abaixo do
+    quadro. Sem foto: interno do quadro vira Navy solido."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    if foto_capa_url:
+        photo_inner = (
+            f'<div class="frame-photo" style="background-image: url(\'{foto_capa_url}\')"></div>'
+        )
+    else:
+        photo_inner = '<div class="frame-photo frame-fallback"></div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .tag {{
+    position: absolute;
+    top: 380px; left: 50%;
+    transform: translateX(-50%);
+    font-family: {font_body};
+    font-size: 56px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: {_SC_NAVY};
+    opacity: 0.7;
+    z-index: 4;
+  }}
+  .frame-wrap {{
+    position: absolute;
+    top: 18%; left: 50%;
+    transform: translateX(-50%);
+    width: 62%;
+    aspect-ratio: 4 / 5;
+    background: {_SC_BEIGE};
+    padding: 60px;
+    box-shadow:
+      0 80px 140px rgba(24,32,40,0.28),
+      0 18px 40px rgba(24,32,40,0.18);
+    z-index: 2;
+  }}
+  .frame-inner {{
+    width: 100%; height: 100%;
+    border: 8px solid {_SC_NAVY};
+  }}
+  .frame-photo {{
+    width: 100%; height: 100%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }}
+  .frame-fallback {{
+    background: {_SC_NAVY};
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 280px;
+    text-align: center;
+    z-index: 4;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 170px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 64px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    margin-top: 40px;
+    max-width: 30ch;
+    margin-left: auto; margin-right: auto;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 50%;
+    transform: translateX(-50%);
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 5;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="tag">PERFIL · {_brand_label().upper()}</div>
+  <div class="frame-wrap">
+    <div class="frame-inner">
+      {photo_inner}
+    </div>
+  </div>
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_grid_stats(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 15 "Grid stats".
+
+    Fundo Paper. Grid 2x2 com 4 numeros/percentuais gigantes Navy
+    + label curta abaixo. Titulo grande Navy ancorado acima do
+    grid. Body usa convencao 'n1: l1; n2: l2; n3: l3; n4: l4' —
+    cada par numero:label separado por ';', numero e label
+    separados por ':'. Capa sem foto por design."""
+    del foto_capa_url
+    raw = (body or "").strip()
+    pairs = []
+    for chunk in raw.split(";"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if ":" in chunk:
+            n, l = chunk.split(":", 1)
+            pairs.append((n.strip(), l.strip()))
+        else:
+            pairs.append((chunk, ""))
+    while len(pairs) < 4:
+        pairs.append(("—", ""))
+    pairs = pairs[:4]
+    # 4 quadrantes — cores alternam pra dar ritmo
+    colors = [_SC_NAVY, _SC_CYAN, _SC_NAVY, _SC_BEIGE]
+    cells = []
+    for i, (num, lab) in enumerate(pairs):
+        c = colors[i]
+        cells.append(
+            '<div class="cell">'
+            f'<div class="cell-num" style="color: {c};">{_h(num)}</div>'
+            f'<div class="cell-lab">{_h(lab)}</div>'
+            "</div>"
+        )
+    grid_html = "\n".join(cells)
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .head {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 22%;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 160px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .grid {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 44%;
+    bottom: 240px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 80px;
+  }}
+  .cell {{
+    display: flex; flex-direction: column;
+    justify-content: center;
+    border-top: 6px solid {_SC_NAVY};
+    padding-top: 30px;
+  }}
+  .cell-num {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 280px;
+    line-height: 0.92;
+    letter-spacing: -0.04em;
+  }}
+  .cell-lab {{
+    font-family: {font_body};
+    font-weight: 600;
+    font-size: 56px;
+    line-height: 1.20;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    margin-top: 24px;
+    max-width: 20ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="head"><h1 class="capa-titulo">{_h(titulo)}</h1></div>
+  <div class="grid">{grid_html}</div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_highlight(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 18 "Highlight".
+
+    Fundo Paper. Headline gigante com UMA palavra em destaque
+    sublinhado Cyan pintada como marca-texto. Convencao: a palavra
+    a destacar vem entre **asteriscos** dentro do titulo (markdown-
+    like). Body opcional Navy mono na base. Capa sem foto por design.
+
+    Ex: 'O sindico que **mede** sempre melhora' renderiza 'mede' com
+    fundo Cyan."""
+    del foto_capa_url
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    # Substitui **palavra** por <span class="hl">palavra</span>
+    titulo_html = _h(titulo or "")
+    import re as _re
+    titulo_html = _re.sub(
+        r"\*\*([^*]+)\*\*",
+        r'<span class="hl">\1</span>',
+        titulo_html,
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 280px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-titulo .hl {{
+    /* Marca-texto Cyan: gradient horizontal cobrindo ~60% da altura
+       da palavra, posicao alta pra parecer destacador real */
+    background: linear-gradient(180deg,
+      transparent 0%,
+      transparent 35%,
+      {_SC_CYAN} 35%,
+      {_SC_CYAN} 92%,
+      transparent 92%);
+    padding: 0 8px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }}
+  .footer {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 220px;
+    z-index: 3;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 68px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    max-width: 28ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="content">
+    <h1 class="capa-titulo">{titulo_html}</h1>
+  </div>
+  <div class="footer">{body_html}</div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_stamp(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 30 "Stamp".
+
+    Fundo Paper. Headline Navy grande ancorada acima do meio. Selo
+    estilo carimbo vermelho diagonal (-18deg) sobre a headline,
+    com borda dupla e texto 'FATO' / 'VERDADE' centralizado.
+    Convencao: a palavra do selo vem no body (default 'FATO').
+    Capa sem foto por design."""
+    del foto_capa_url
+    stamp_word = (body or "Fato").strip().upper()
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 38%;
+    transform: translateY(-50%);
+    z-index: 2;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 220px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .stamp-wrap {{
+    position: absolute;
+    bottom: 320px;
+    right: 240px;
+    transform: rotate(-18deg);
+    z-index: 4;
+    pointer-events: none;
+  }}
+  .stamp {{
+    border: 14px solid #C13F3F;
+    padding: 50px 90px;
+    color: #C13F3F;
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 220px;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.05);
+    opacity: 0.92;
+    /* Cantos quadrados + sombra interna sutil pra parecer carimbo */
+    box-shadow: inset 0 0 0 6px #C13F3F;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+  </div>
+  <div class="stamp-wrap">
+    <div class="stamp">{_h(stamp_word)}</div>
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_photo_strip(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 35 "Photo strip".
+
+    Fundo Paper. Foto em strip horizontal estreito centralizado
+    (~22% da altura) ocupando full-bleed. Headline Navy bold
+    ancorada acima da strip, body Navy abaixo. Sem foto: strip
+    vira Beige solida."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    if foto_capa_url:
+        strip = (
+            f'<div class="strip" style="background-image: url(\'{foto_capa_url}\')"></div>'
+        )
+    else:
+        strip = '<div class="strip strip-fallback"></div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .strip {{
+    position: absolute;
+    left: 0; right: 0;
+    top: 39%; height: 22%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 1;
+  }}
+  .strip-fallback {{
+    background: {_SC_BEIGE};
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .head {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 39%;
+    transform: translateY(-100%);
+    padding-bottom: 70px;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 200px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .footer {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 220px;
+    z-index: 3;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 72px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.80;
+    max-width: 28ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {strip}
+  {logo_top_img}
+  <div class="head"><h1 class="capa-titulo">{_h(titulo)}</h1></div>
+  <div class="footer">{body_html}</div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_bullet_list(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 19 "Bullet list".
+
+    Fundo Paper. Headline Navy grande no topo + lista de 3 a 5 bullets
+    com pilulas numeradas Cyan + texto Navy. Body usa convencao
+    'item1; item2; item3' (separados por ';'). Capa sem foto por
+    design."""
+    del foto_capa_url
+    raw = (body or "").strip()
+    items = [x.strip() for x in raw.split(";") if x.strip()]
+    if not items:
+        items = ["—"]
+    items = items[:5]
+    rows = []
+    for i, txt in enumerate(items, start=1):
+        rows.append(
+            '<div class="row">'
+            f'<span class="pill">{i:02d}</span>'
+            f'<span class="row-text">{_h(txt)}</span>'
+            "</div>"
+        )
+    rows_html = "\n".join(rows)
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .head {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 24%;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 180px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .rows {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 320px;
+    display: flex; flex-direction: column; gap: 50px;
+  }}
+  .row {{
+    display: flex; align-items: center; gap: 50px;
+  }}
+  .pill {{
+    flex-shrink: 0;
+    width: 130px; height: 130px;
+    border-radius: 50%;
+    background: {_SC_CYAN};
+    color: {_SC_NAVY};
+    display: flex; align-items: center; justify-content: center;
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 70px;
+    letter-spacing: -0.02em;
+  }}
+  .row-text {{
+    font-family: {font_display};
+    font-weight: 600;
+    font-size: 82px;
+    line-height: 1.18;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="head"><h1 class="capa-titulo">{_h(titulo)}</h1></div>
+  <div class="rows">{rows_html}</div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_wallpaper(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 26 "Wallpaper".
+
+    Fundo Paper. Pattern Sindicompany (S_SVG) repetido em tile
+    cobrindo toda a tela em opacidade reduzida. Card Beige
+    centralizado vertical (~50% altura) com label Cyan no topo +
+    headline Navy grande + body Navy pequeno. Capa sem foto por
+    design."""
+    del foto_capa_url
+    body_html = (
+        f'<p class="card-body">{_h(body)}</p>' if body else ""
+    )
+    pattern_url = (
+        _logo_slot_data_url(2)
+        or _logo_slot_data_url(3)
+        or _logo_slot_data_url(1)
+        or ""
+    )
+    pattern_layer = (
+        f'<div class="pattern" style="background-image: url(\'{pattern_url}\');"></div>'
+        if pattern_url
+        else ''
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .pattern {{
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-repeat: repeat;
+    background-size: 320px 320px;
+    opacity: 0.16;
+    z-index: 0;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .card {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: {_SC_BEIGE};
+    padding: 140px 130px;
+    z-index: 3;
+    box-shadow: 0 60px 120px rgba(24,32,40,0.18);
+  }}
+  .card-label {{
+    display: inline-block;
+    padding: 18px 36px;
+    background: {_SC_CYAN};
+    color: {_SC_NAVY};
+    font-family: {font_body};
+    font-weight: 800;
+    font-size: 48px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 60px;
+  }}
+  .card-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 200px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .card-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 72px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.80;
+    margin-top: 50px;
+    max-width: 26ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {pattern_layer}
+  {logo_top_img}
+  <div class="card">
+    <span class="card-label">{_brand_label()}</span>
+    <h1 class="card-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_underline(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 34 "Underline".
+
+    Fundo Paper. Headline Navy gigante com UMA palavra entre
+    **asteriscos** ganhando um underline grosso Cyan (12px) logo
+    abaixo. Diferente do highlight (que pinta marca-texto sobre a
+    palavra) este so destaca pelo sublinhado, com tipografia
+    inalterada. Capa sem foto por design.
+
+    Ex: 'Quem **mede** sempre melhora.' """
+    del foto_capa_url
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    titulo_html = _h(titulo or "")
+    import re as _re
+    titulo_html = _re.sub(
+        r"\*\*([^*]+)\*\*",
+        r'<span class="u">\1</span>',
+        titulo_html,
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 260px;
+    line-height: 1.04;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-titulo .u {{
+    /* Underline grosso Cyan, posicionado pra simular pinceladas
+       sob a palavra. Usa box-shadow inset pra dar peso visual. */
+    text-decoration: underline;
+    text-decoration-color: {_SC_CYAN};
+    text-decoration-thickness: 24px;
+    text-underline-offset: 12px;
+  }}
+  .footer {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 220px;
+    z-index: 3;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 68px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    max-width: 28ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="content">
+    <h1 class="capa-titulo">{titulo_html}</h1>
+  </div>
+  <div class="footer">{body_html}</div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_photo_grid(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 36 "Photo grid".
+
+    Grid horizontal 50/50: foto na metade superior + Paper bloco
+    na metade inferior. Headline Navy bold + body Navy ancorados
+    no canto inferior esquerdo do bloco. Sem foto: metade superior
+    vira Beige solido."""
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    if foto_capa_url:
+        photo_half = (
+            f'<div class="photo-half" style="background-image: url(\'{foto_capa_url}\')"></div>'
+        )
+    else:
+        photo_half = '<div class="photo-half photo-fallback"></div>'
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .photo-half {{
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 50%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 0;
+  }}
+  .photo-fallback {{
+    background: {_SC_BEIGE};
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) invert(1);
+  }}
+  .text-half {{
+    position: absolute;
+    left: 0; right: 0;
+    top: 50%; bottom: 0;
+    background: {_SC_PAPER};
+    padding: 160px 180px 220px;
+    z-index: 1;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 210px;
+    line-height: 0.95;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 74px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    margin-top: 50px;
+    max-width: 28ch;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  {photo_half}
+  {logo_top_img}
+  <div class="text-half">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_timeline(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 16 "Timeline".
+
+    Fundo Paper. Linha vertical Navy a esquerda, com 3 a 5 pontos
+    Cyan circulares numerados — cada um seguido de texto Navy ao
+    lado. Headline grande no topo. Body usa convencao
+    'etapa1; etapa2; etapa3' (separados por ';'). Capa sem foto."""
+    del foto_capa_url
+    raw = (body or "").strip()
+    items = [x.strip() for x in raw.split(";") if x.strip()]
+    if not items:
+        items = ["—"]
+    items = items[:5]
+    rows = []
+    for i, txt in enumerate(items, start=1):
+        rows.append(
+            '<div class="step">'
+            f'<div class="dot"><span>{i:02d}</span></div>'
+            f'<div class="step-text">{_h(txt)}</div>'
+            "</div>"
+        )
+    steps_html = "\n".join(rows)
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .head {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 22%;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 170px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .steps {{
+    position: absolute;
+    left: 220px; right: 180px;
+    bottom: 320px;
+    display: flex; flex-direction: column; gap: 60px;
+    /* Linha vertical Navy atrás dos pontos */
+  }}
+  .steps::before {{
+    content: "";
+    position: absolute;
+    top: 70px; bottom: 70px;
+    left: 65px;
+    width: 6px;
+    background: {_SC_NAVY};
+    opacity: 0.20;
+    z-index: 0;
+  }}
+  .step {{
+    display: flex; align-items: center; gap: 60px;
+    position: relative; z-index: 1;
+  }}
+  .dot {{
+    flex-shrink: 0;
+    width: 130px; height: 130px;
+    border-radius: 50%;
+    background: {_SC_CYAN};
+    color: {_SC_NAVY};
+    display: flex; align-items: center; justify-content: center;
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 60px;
+    letter-spacing: -0.02em;
+    box-shadow: 0 0 0 14px {_SC_PAPER};
+  }}
+  .step-text {{
+    font-family: {font_display};
+    font-weight: 600;
+    font-size: 78px;
+    line-height: 1.18;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="head"><h1 class="capa-titulo">{_h(titulo)}</h1></div>
+  <div class="steps">{steps_html}</div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_conversation(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 21 "Conversation".
+
+    Fundo Paper. Bolhas de chat estilo DM/WhatsApp empilhadas
+    verticalmente, alternando incoming (esquerda Beige) e outgoing
+    (direita Cyan). Headline opcional grande no topo. Body usa
+    convencao 'msg1 | msg2 | msg3 | msg4' (pipe separador, alterna
+    in/out). Capa sem foto por design."""
+    del foto_capa_url
+    raw = (body or "").strip()
+    msgs = [x.strip() for x in raw.split("|") if x.strip()]
+    if not msgs:
+        msgs = ["—"]
+    msgs = msgs[:6]
+    bubbles = []
+    for i, txt in enumerate(msgs):
+        side = "in" if i % 2 == 0 else "out"
+        bubbles.append(
+            f'<div class="bubble bubble-{side}">{_h(txt)}</div>'
+        )
+    chat_html = "\n".join(bubbles)
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .head {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 22%;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 150px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .chat {{
+    position: absolute;
+    left: 220px; right: 220px;
+    bottom: 320px;
+    display: flex; flex-direction: column; gap: 36px;
+  }}
+  .bubble {{
+    max-width: 78%;
+    padding: 50px 70px;
+    font-family: {font_body};
+    font-weight: 500;
+    font-size: 72px;
+    line-height: 1.20;
+    border-radius: 50px;
+    /* Cantos diferentes pra cada lado simulam tail real do chat */
+  }}
+  .bubble-in {{
+    background: {_SC_BEIGE};
+    color: {_SC_NAVY};
+    align-self: flex-start;
+    border-bottom-left-radius: 12px;
+  }}
+  .bubble-out {{
+    background: {_SC_CYAN};
+    color: {_SC_NAVY};
+    align-self: flex-end;
+    border-bottom-right-radius: 12px;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 3;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="head"><h1 class="capa-titulo">{_h(titulo)}</h1></div>
+  <div class="chat">{chat_html}</div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_receipt(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 29 "Receipt".
+
+    Fundo Paper. Bloco estreito centralizado tipo nota fiscal /
+    recibo (papel-bege com linhas) listando itens + valores. Titulo
+    no topo do recibo, linhas duplas, total na base. Body usa
+    convencao 'item1: valor1; item2: valor2; ...' (semicolons
+    separam linhas, dois-pontos separa descricao do valor). Capa
+    sem foto por design."""
+    del foto_capa_url
+    raw = (body or "").strip()
+    lines = []
+    total = ""
+    for chunk in raw.split(";"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if ":" in chunk:
+            n, v = chunk.split(":", 1)
+            lines.append((n.strip(), v.strip()))
+        else:
+            lines.append((chunk, ""))
+    if lines and lines[-1][0].lower().startswith("total"):
+        total = lines[-1][1]
+        lines = lines[:-1]
+    if not lines:
+        lines = [("—", "—")]
+    lines = lines[:6]
+    items_html = "\n".join(
+        f'<div class="rec-row"><span class="rec-name">{_h(n)}</span><span class="rec-dots"></span><span class="rec-val">{_h(v)}</span></div>'
+        for n, v in lines
+    )
+    total_block = (
+        f'<div class="rec-total"><span>Total</span><span class="rec-total-val">{_h(total)}</span></div>'
+        if total
+        else ""
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_NAVY};
+    color: #ffffff;
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) invert(1);
+  }}
+  .receipt {{
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 70%;
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    padding: 110px 90px 90px;
+    box-shadow: 0 80px 160px rgba(0,0,0,0.45);
+    /* Borda serrilhada inferior (ziguezague tipo papel rasgado) */
+    -webkit-mask-image:
+      linear-gradient(#000,#000),
+      conic-gradient(from -45deg at bottom, #0000 90deg, #000 0) 50% 100%/40px 20px repeat-x;
+  }}
+  .rec-title {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 110px;
+    line-height: 0.96;
+    color: {_SC_NAVY};
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }}
+  .rec-sub {{
+    font-family: {font_body};
+    font-weight: 600;
+    font-size: 36px;
+    color: {_SC_NAVY};
+    opacity: 0.65;
+    text-align: center;
+    margin-top: 14px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }}
+  .rec-divider {{
+    border-top: 4px dashed {_SC_NAVY};
+    opacity: 0.4;
+    margin: 60px 0;
+  }}
+  .rec-row {{
+    display: flex; align-items: flex-end; gap: 12px;
+    font-family: {font_body};
+    font-size: 56px;
+    font-weight: 500;
+    color: {_SC_NAVY};
+    margin-bottom: 30px;
+  }}
+  .rec-name {{ flex: 0 0 auto; }}
+  .rec-dots {{
+    flex: 1 1 auto;
+    border-bottom: 4px dotted {_SC_NAVY};
+    opacity: 0.35;
+    transform: translateY(-8px);
+  }}
+  .rec-val {{ flex: 0 0 auto; font-weight: 700; }}
+  .rec-total {{
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 84px;
+    color: {_SC_NAVY};
+    margin-top: 30px;
+    padding-top: 30px;
+    border-top: 6px solid {_SC_NAVY};
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }}
+  .rec-total-val {{ color: {_SC_NAVY}; }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 50%;
+    transform: translateX(-50%);
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="receipt">
+    <div class="rec-title">{_h(titulo)}</div>
+    <div class="rec-sub">{_brand_label()} · Recibo</div>
+    <div class="rec-divider"></div>
+    {items_html}
+    {total_block}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_corner_tape(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 41 "Corner tape".
+
+    Fundo Paper com fitas adesivas Cyan diagonais nos 4 cantos
+    'prendendo' o papel. Headline Navy gigante centralizada + body
+    Navy mono abaixo. Estetica zine / mood board. Capa sem foto
+    por design."""
+    del foto_capa_url
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .tape {{
+    position: absolute;
+    width: 400px; height: 110px;
+    background: {_SC_CYAN};
+    opacity: 0.88;
+    box-shadow: 0 12px 30px rgba(24,32,40,0.18);
+    z-index: 2;
+  }}
+  .tape::before, .tape::after {{
+    /* Bordas serrilhadas das fitas (cantos rasgados) */
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 24px;
+    background:
+      linear-gradient(45deg, transparent 50%, {_SC_PAPER} 50%) top left/24px 24px no-repeat,
+      linear-gradient(-45deg, transparent 50%, {_SC_PAPER} 50%) bottom left/24px 24px no-repeat,
+      linear-gradient(135deg, transparent 50%, {_SC_PAPER} 50%) top right/24px 24px no-repeat,
+      linear-gradient(-135deg, transparent 50%, {_SC_PAPER} 50%) bottom right/24px 24px no-repeat;
+    background-color: transparent;
+  }}
+  .tape::before {{ left: -2px; }}
+  .tape::after  {{ right: -2px; transform: scaleX(-1); }}
+  .tape-tl {{ top: 80px;  left: -50px;  transform: rotate(-25deg); }}
+  .tape-tr {{ top: 80px;  right: -50px; transform: rotate(25deg);  }}
+  .tape-bl {{ bottom: 80px; left: -50px;  transform: rotate(25deg);  }}
+  .tape-br {{ bottom: 80px; right: -50px; transform: rotate(-25deg); }}
+  .logo-top {{
+    position: absolute;
+    top: 220px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .content {{
+    position: absolute;
+    left: 240px; right: 240px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    text-align: center;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 260px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 500;
+    font-size: 70px;
+    line-height: 1.30;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    margin-top: 60px;
+    max-width: 28ch;
+    margin-left: auto; margin-right: auto;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 180px; left: 50%;
+    transform: translateX(-50%);
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  <div class="tape tape-tl"></div>
+  <div class="tape tape-tr"></div>
+  <div class="tape tape-bl"></div>
+  <div class="tape tape-br"></div>
+  {logo_top_img}
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_ribbon(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 13 "Ribbon".
+
+    Fundo Paper. Fita Cyan diagonal larga (-25deg) atravessando o
+    slide do canto inferior esquerdo ao canto superior direito,
+    com texto Navy bold curto (body) escrito na fita em uppercase.
+    Headline Navy gigante centralizada acima/abaixo conforme cabe.
+    Capa sem foto por design."""
+    del foto_capa_url
+    ribbon_text = (body or titulo or _brand_label()).strip().upper()
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .ribbon-wrap {{
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-25deg);
+    width: 200%;
+    z-index: 2;
+    pointer-events: none;
+  }}
+  .ribbon {{
+    background: {_SC_CYAN};
+    padding: 80px 0;
+    text-align: center;
+    color: {_SC_NAVY};
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 140px;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    box-shadow:
+      0 30px 80px rgba(24,32,40,0.20),
+      0 8px 16px rgba(24,32,40,0.10);
+  }}
+  .head {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 16%;
+    z-index: 3;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 170px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="head"><h1 class="capa-titulo">{_h(titulo)}</h1></div>
+  <div class="ribbon-wrap">
+    <div class="ribbon">{_h(ribbon_text)}</div>
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_polaroid_stack(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 22 "Polaroid stack".
+
+    Fundo Paper. 3 polaroides Beige empilhadas no centro com rotacoes
+    leves diferentes (-8deg/3deg/-2deg) e sombras profundas, simulando
+    fotos espalhadas sobre mesa. Caption da polaroide central virou
+    o titulo. Headline Navy abaixo do stack. Capa sem foto por
+    design (as polaroides ficam Beige solidas)."""
+    del foto_capa_url
+    body_html = (
+        f'<p class="capa-body">{_h(body)}</p>' if body else ""
+    )
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .stack {{
+    position: absolute;
+    top: 16%; left: 50%;
+    transform: translateX(-50%);
+    width: 50%;
+    aspect-ratio: 4 / 5;
+  }}
+  .pol {{
+    position: absolute;
+    inset: 0;
+    background: #ffffff;
+    padding: 40px 40px 130px;
+    box-shadow:
+      0 50px 100px rgba(24,32,40,0.22),
+      0 16px 36px rgba(24,32,40,0.14);
+  }}
+  .pol-inner {{
+    width: 100%; height: 100%;
+    background: {_SC_BEIGE};
+  }}
+  .pol-1 {{ transform: rotate(-8deg) translate(-60px, -10px); }}
+  .pol-2 {{ transform: rotate(3deg)  translate(40px,  20px); }}
+  .pol-3 {{ transform: rotate(-2deg); z-index: 2; }}
+  .pol-3 .pol-inner {{
+    background: {_SC_CYAN};
+  }}
+  .pol-caption {{
+    position: absolute;
+    bottom: 28px; left: 0; right: 0;
+    text-align: center;
+    font-family: {font_display};
+    font-style: italic;
+    font-weight: 500;
+    font-size: 52px;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 280px;
+    text-align: center;
+    z-index: 4;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 170px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .capa-body {{
+    font-family: {font_body};
+    font-weight: 400;
+    font-size: 64px;
+    line-height: 1.28;
+    color: {_SC_NAVY};
+    opacity: 0.78;
+    margin-top: 40px;
+    max-width: 30ch;
+    margin-left: auto; margin-right: auto;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 50%;
+    transform: translateX(-50%);
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 5;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="stack">
+    <div class="pol pol-1"><div class="pol-inner"></div></div>
+    <div class="pol pol-2"><div class="pol-inner"></div></div>
+    <div class="pol pol-3">
+      <div class="pol-inner"></div>
+      <div class="pol-caption">{_brand_label()} · {_h(handle)}</div>
+    </div>
+  </div>
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+    {body_html}
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_maxi_quote(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 27 "Maxi quote".
+
+    Fundo Paper. Citacao gigante em duas linhas com cores e
+    tratamentos diferentes: linha 1 (titulo) em italic Navy bold,
+    linha 2 (body) em italic Cyan extra-bold sublinhado. Ponto final
+    Beige gigante na base como acento visual. Capa sem foto por
+    design.
+
+    Quando o usuario quer 'uma frase com efeito', body separa o
+    pensamento principal do contraponto."""
+    del foto_capa_url
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .quote {{
+    position: absolute;
+    left: 180px; right: 180px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+  }}
+  .line1 {{
+    font-family: {font_display};
+    font-style: italic;
+    font-weight: 700;
+    font-size: 240px;
+    line-height: 1.0;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .line2 {{
+    font-family: {font_display};
+    font-style: italic;
+    font-weight: 800;
+    font-size: 240px;
+    line-height: 1.0;
+    letter-spacing: -0.025em;
+    color: {_SC_CYAN};
+    text-wrap: balance;
+    margin-top: 30px;
+    /* Sublinhado grosso pra dar peso visual */
+    text-decoration: underline;
+    text-decoration-color: {_SC_CYAN};
+    text-decoration-thickness: 18px;
+    text-underline-offset: 14px;
+  }}
+  .accent {{
+    position: absolute;
+    right: 180px;
+    bottom: 260px;
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 380px;
+    line-height: 0.6;
+    color: {_SC_BEIGE};
+    z-index: 1;
+    pointer-events: none;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 180px;
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_NAVY};
+    letter-spacing: 0.04em;
+    z-index: 4;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="quote">
+    <div class="line1">{_h(titulo)}</div>
+    <div class="line2">{_h(body or "")}</div>
+  </div>
+  <div class="accent">.</div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+def _capa_calendar(
+    *,
+    titulo: str,
+    body: str,
+    handle: str,
+    logo_top_img: str,
+    head_fonts: str,
+    font_display: str,
+    font_body: str,
+    foto_capa_url: str = "",
+) -> str:
+    """Brand Hub 2026-05-17 — capa 28 "Calendar".
+
+    Fundo Paper. Bloco de calendario Navy centralizado no topo, tipo
+    folha de calendario destacavel: header Beige com nome do mes,
+    numero gigante no centro do bloco. Headline Navy ancorada abaixo
+    do bloco + body. Body usa convencao 'mes | dia' (pipe separa).
+    Default: mes=MAIO, dia=18. Capa sem foto por design."""
+    del foto_capa_url
+    raw = (body or "").strip()
+    parts = raw.split("|", 1)
+    mes_label = (parts[0].strip() if parts and parts[0].strip() else "MAIO").upper()
+    dia_label = (parts[1].strip() if len(parts) > 1 and parts[1].strip() else "18")
+    return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{
+    font-family: {font_body};
+    background: {_SC_PAPER};
+    color: {_SC_NAVY};
+    overflow: hidden;
+    position: relative;
+  }}
+  .logo-top {{
+    position: absolute;
+    top: 100px; left: 180px;
+    width: 700px; max-height: 220px;
+    object-fit: contain;
+    z-index: 5;
+    filter: brightness(0) saturate(100%);
+  }}
+  .cal {{
+    position: absolute;
+    top: 18%; left: 50%;
+    transform: translateX(-50%) rotate(-2deg);
+    width: 56%;
+    background: #ffffff;
+    border: 12px solid {_SC_NAVY};
+    box-shadow: 0 60px 120px rgba(24,32,40,0.28),
+                0 20px 40px rgba(24,32,40,0.18);
+    z-index: 2;
+  }}
+  .cal-header {{
+    background: {_SC_BEIGE};
+    padding: 40px 0;
+    text-align: center;
+    font-family: {font_body};
+    font-weight: 800;
+    font-size: 90px;
+    color: {_SC_NAVY};
+    letter-spacing: 0.10em;
+    border-bottom: 12px solid {_SC_NAVY};
+  }}
+  .cal-day {{
+    padding: 100px 0 120px;
+    text-align: center;
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 540px;
+    line-height: 0.85;
+    color: {_SC_NAVY};
+    letter-spacing: -0.05em;
+  }}
+  .content {{
+    position: absolute;
+    left: 180px; right: 180px;
+    bottom: 280px;
+    text-align: center;
+    z-index: 4;
+  }}
+  .capa-titulo {{
+    font-family: {font_display};
+    font-weight: 800;
+    font-size: 170px;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
+    color: {_SC_NAVY};
+    text-wrap: balance;
+  }}
+  .handle {{
+    position: absolute;
+    bottom: 100px; left: 50%;
+    transform: translateX(-50%);
+    font-family: {font_body};
+    font-size: 64px;
+    font-weight: 600;
+    color: {_SC_CYAN};
+    letter-spacing: 0.04em;
+    z-index: 5;
+  }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="cal">
+    <div class="cal-header">{_h(mes_label)}</div>
+    <div class="cal-day">{_h(dia_label)}</div>
+  </div>
+  <div class="content">
+    <h1 class="capa-titulo">{_h(titulo)}</h1>
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+
+# Registry dos arquetipos de capa do Brand Hub Sindicompany 2026-05-17.
+#
+# REGRA INDISPENSAVEL: todo arquetipo que tem variante COM FOTO deve
+# usar exatamente a foto carregada pelo operador na etapa 3 "Foto da
+# capa" do /sindicompany/carrossel/novo. Essa URL chega como
+# foto_capa_url no parametro de cada funcao, originada de
+# carrosseis.foto_capa_url no Supabase. NAO buscar foto stock, NAO
+# gerar via IA, NAO usar foto de outro slide — sempre a foto da etapa 3.
+#
+# Arquetipos SEM foto (capas 03/04/05/06/14 e similares) descartam o
+# parametro via `del foto_capa_url` no inicio da funcao.
+#
+# Arquetipos COM foto (capas 02/07/11/25/31/32/33/35/36/37/38/39/40/42
+# do doc) devem ler foto_capa_url e renderizar a foto. Se foto_capa_url
+# vier vazia, eh aceitavel cair pra uma variante minimalista sem foto
+# (ver _capa_editorial_question como referencia).
+COVER_ARCHETYPES_SC = {
+    # SEM foto (7) — selecionados pela Juliana 2026-05-18
+    "numbered-guide": _capa_numbered_guide,
+    "manifesto": _capa_manifesto,
+    "pattern-explosion": _capa_pattern_explosion,
+    "sticky-note": _capa_sticky_note,
+    "brackets": _capa_brackets,
+    "type-tower": _capa_type_tower,
+    "corner-tape": _capa_corner_tape,
+    # COM foto (11) — consomem foto_capa_url da etapa 3
+    "foto-editorial": _capa_foto_editorial,
+    "dark-premium": _capa_dark_premium,
+    "magazine-cover": _capa_magazine_cover,
+    "split-portrait": _capa_split_portrait,
+    "hero-portrait": _capa_hero_portrait,
+    "photo-circle": _capa_photo_circle,
+    "photo-banner": _capa_photo_banner,
+    "photo-blur": _capa_photo_blur,
+    "cinema": _capa_cinema,
+    "polaroid": _capa_polaroid,
+    "portrait-frame": _capa_portrait_frame,
+}
+# Arquetipos removidos da selecao (funcoes _capa_* mantidas no arquivo
+# por enquanto pra preservar git history e permitir voltar facil; limpeza
+# do dead code fica pra commit dedicado): editorial-question, stat-slap,
+# pull-quote, headline-only, glow-hero, versus, mythbuster, split-color,
+# grid-stats, highlight, stamp, bullet-list, wallpaper, underline,
+# timeline, conversation, receipt, ribbon, maxi-quote, calendar,
+# polaroid-stack, avatar-quote, floating-card, photo-strip, photo-grid.
+
+
+def _slide_pagination(
+    slide_idx: int,
+    total: int,
+    is_frase: bool,
+    accent: str,
+    fg_color: str,
+    font_numeric: str,
+) -> str:
+    """Paginacao do slide (pool por carrossel), pra TODAS as marcas. Cores
+    da marca (accent + texto) e fonte numerica da marca. Frase/respiro nao
+    recebe marcador. Substitui o antigo numero gigante (bignum)."""
+    if is_frase:
+        return ""
+    return brand_kit.sc_pagination_html(
+        _PAGINATION_STYLE or "dots",
+        slide_idx,
+        total,
+        accent,
+        fg_color,
+        font=font_numeric,
+    )
 
 
 def _slide_html(
@@ -1047,19 +6959,34 @@ def _slide_html(
     p = _palette()
     handle = _handle()
     is_consvicta = _BRAND == "consvictabr"
-    epilogue_url = (
-        "https://fonts.googleapis.com/css2?family=Epilogue:wght@400;600;800;900&display=swap"
-    )
     # Consvicta usa tipografia propria (Cormorant Garamond + Outfit +
-    # Bebas Neue), embutida via base64 — sem dependencia de Google
-    # Fonts no render. Demais marcas seguem com Epilogue (Google Fonts).
-    if is_consvicta:
+    # Bebas Neue), embutida via base64. Sindicompany/By Sindicompany
+    # usam Provicali (wordmark) + Epilogue (display/body/numeric)
+    # tambem embutidas via base64 do Brand Hub 2026-05-17. Sem
+    # dependencia de Google Fonts no render.
+    # Marca nova com tipografia propria (zip de fontes importado): embute as
+    # fontes do bucket. Se nao houver/falhar, cai no caminho embutido padrao.
+    # Para as 3 marcas chumbadas _BRAND_TIPOGRAFIA e None -> brand_fonts None.
+    brand_fonts = _brand_fonts_from_tipografia()
+    if brand_fonts:
+        head_fonts, font_display, font_body, font_numeric = brand_fonts
+    elif is_consvicta:
         head_fonts = f"<style>{_consvicta_fonts_css()}</style>"
         font_display = "'Cormorant Garamond', Georgia, serif"
         font_body = "'Outfit', system-ui, sans-serif"
         font_numeric = "'Bebas Neue', Impact, sans-serif"
     else:
-        head_fonts = f'<link href="{epilogue_url}" rel="stylesheet">'
+        sindi_css = _sindicompany_fonts_css()
+        if sindi_css:
+            head_fonts = f"<style>{sindi_css}</style>"
+        else:
+            # Fallback: Google Fonts Epilogue se o CSS inline nao tiver
+            # sido empacotado por algum motivo.
+            head_fonts = (
+                '<link href="https://fonts.googleapis.com/css2?'
+                'family=Epilogue:wght@400;600;800;900&display=swap" '
+                'rel="stylesheet">'
+            )
         font_display = "'Epilogue', sans-serif"
         font_body = "'Epilogue', sans-serif"
         font_numeric = "'Epilogue', sans-serif"
@@ -1069,25 +6996,51 @@ def _slide_html(
     # @bysindicompany usa LOGO 1 do bucket __by-logos no topo;
     # @consvictabr usa LOGO 1 do bucket __consvicta-logos; @sindicompanybr
     # usa o slot 5 do bucket __logos (logo principal Sindicompany).
-    if _BRAND == "bysindicompany":
-        logo_top_slot = 1
-    elif _BRAND == "consvictabr":
-        logo_top_slot = 1
+    if _BRAND == "sindicompanybr":
+        # Logo recolorivel (Brand Kit): simbolo por mascara + wordmark
+        # Provicali, colorido pelo fundo do slide (capa/CTA escuros ->
+        # branco; conteudo claro -> navy). Substitui o PNG de slot fixo.
+        _bg_dark = (
+            is_capa
+            or (tipo or "").strip().lower() == "cta"
+            or slide_idx == total
+        )
+        _hc, _dc, _wc = brand_kit.pick_logo_colors(_bg_dark, _palette())
+        logo_top_img = brand_kit.sc_logo_horizontal_html(
+            720, _hc, _dc, _wc, klass="logo-top"
+        )
+        if not logo_top_img:  # mascara ausente -> fallback pro slot legado
+            _u = _logo_slot_data_url(5)
+            logo_top_img = (
+                f'<img class="logo-top" src="{_u}" alt="" />' if _u else ""
+            )
     else:
-        logo_top_slot = 5
-    logo_top_url = _logo_slot_data_url(logo_top_slot)
-    logo_top_img = (
-        f'<img class="logo-top" src="{logo_top_url}" alt="" />'
-        if logo_top_url
-        else ""
-    )
+        if _BRAND == "bysindicompany":
+            logo_top_slot = 1
+        elif _BRAND == "consvictabr":
+            logo_top_slot = 1
+        else:
+            logo_top_slot = 5
+        logo_top_url = _logo_slot_data_url(logo_top_slot)
+        logo_top_img = (
+            f'<img class="logo-top" src="{logo_top_url}" alt="" />'
+            if logo_top_url
+            else ""
+        )
 
     if is_capa:
-        # Slide 1: foto na metade de cima + texto sobre overlay escuro embaixo
+        # Slide 1: foto na metade de cima + texto sobre overlay escuro embaixo.
+        # Sem foto: Sindicompany usa o gradiente Deep Sea (navy->purple);
+        # demais marcas mantem o fallback mint->onix.
+        _capa_grad = (
+            brand_kit.gradient_css("deep_sea")
+            if _BRAND == "sindicompanybr"
+            else f'linear-gradient(135deg, {p["mint"]} 0%, {p["onix"]} 100%)'
+        )
         bg = (
             f'<div class="hero-img" style="background-image: url(\'{foto_capa_url}\')"></div>'
             if foto_capa_url
-            else f'<div class="hero-img" style="background: linear-gradient(135deg, {p["mint"]} 0%, {p["onix"]} 100%);"></div>'
+            else f'<div class="hero-img" style="background: {_capa_grad};"></div>'
         )
         body_html = (
             f'<p class="capa-body">{_h_with_data(body, is_consvicta)}</p>'
@@ -1101,17 +7054,124 @@ def _slide_html(
             stem = _consvicta_pick_icon(titulo, body, fallback_ctx="capa")
             # Na capa o fundo eh sempre escuro (hero img) → icone branco.
             icon_url = _consvicta_icon_data_url(stem, "#FDFCF9")
+        elif _BRAND == "sindicompanybr":
+            # Brand Kit ja cobre a marca (logo recolorivel); nao usa o icone
+            # legado do bucket __icons na capa (senao o que for subido na
+            # galeria de Icons reaparece no canto da capa).
+            icon_url = ""
         else:
             icon_url = _icon_slot_data_url(2)
         icon_img = (
             f'<img class="brand-icon" src="{icon_url}" alt="" />' if icon_url else ""
         )
-        # Watermark do logo Consvicta atras de tudo (slot 2 do
-        # bucket __consvicta-logos — slot 1 ja eh o logo do topo).
-        # Se nao houver logo no slot 2, fica sem watermark.
-        watermark_url = _logo_slot_data_url(2) if is_consvicta else ""
-        watermark_div = (
-            f'<div class="logo-watermark"></div>' if watermark_url else ""
+        # Watermark do logo Consvicta — REMOVIDO por decisao de design
+        # (limpa o fundo dos carrosseis @consvictabr). Mantem variavel
+        # vazia pra nao quebrar o CSS template.
+        watermark_url = ""
+        watermark_div = ""
+        # Pattern + Fundo Carrossel na CAPA pra Consvicta — sempre
+        # aplicados pra enriquecer visualmente. Outras marcas nao
+        # tem pattern na capa (comportamento legado).
+        capa_pattern_url = (
+            _pattern_for_slide(1, is_capa=True) if is_consvicta else ""
+        )
+        capa_pattern_div = (
+            '<div class="pattern-bg-capa"></div>' if capa_pattern_url else ""
+        )
+        capa_fundo_url = (
+            _icon_for_slide(1, is_capa=True) if is_consvicta else ""
+        )
+        capa_fundo_div = (
+            '<div class="icon-bg-capa"></div>' if capa_fundo_url else ""
+        )
+
+        # Brand Hub 2026-05-17: arquetipo de capa lido da variavel de
+        # modulo _COVER_ARCHETYPE (setada em gerar_carrossel a partir
+        # do campo carrosseis.cover_archetype, ou da env var legada
+        # SINDICOMPANY_COVER_ARCHETYPE). Vazio ou desconhecido mantem
+        # a capa classica. So aplica pras marcas Sindicompany
+        # (sindicompanybr + bysindicompany), nunca pra Consvicta.
+        archetype_fn = COVER_ARCHETYPES_SC.get(_COVER_ARCHETYPE)
+        if archetype_fn is not None and not is_consvicta:
+            return archetype_fn(
+                titulo=titulo,
+                body=body,
+                handle=handle,
+                logo_top_img=logo_top_img,
+                head_fonts=head_fonts,
+                font_display=font_display,
+                font_body=font_body,
+                foto_capa_url=foto_capa_url,
+            )
+
+        # Capa editorial (Brand Kit): a foto entra na silhueta da casa
+        # (symbolWindow). So Sindicompany, quando o carrossel sorteou o
+        # estilo "house" E ha foto de capa. Fundo Deep Sea.
+        if (
+            _BRAND == "sindicompanybr"
+            and _CAPA_STYLE == "house"
+            and foto_capa_url
+        ):
+            _hero = brand_kit.sc_symbol_window_html(
+                1500, foto_capa_url, p["mint"], photo_focus="50% 28%"
+            )
+            if _hero:
+                _deep = brand_kit.gradient_css("deep_sea")
+                _badge = _h(_formato_label(formato))
+                return f"""
+<!doctype html><html><head><meta charset="utf-8">
+{head_fonts}
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
+  body {{ font-family: {font_body}; background: {_deep};
+    color: {p["white"]}; overflow: hidden; position: relative; }}
+  .logo-top {{ position: absolute; top: 100px; left: 180px; z-index: 5; }}
+  .hero-window {{ position: absolute; top: 380px; left: 0; right: 0;
+    display: flex; justify-content: center; }}
+  .content {{ position: absolute; left: 180px; right: 180px; bottom: 430px;
+    z-index: 4; }}
+  .badge {{ display: inline-block; border: 3px solid rgba(255,255,255,0.4);
+    color: {p["white"]}; font-family: {font_body}; font-weight: 700;
+    font-size: 60px; letter-spacing: 0.18em; padding: 18px 34px;
+    border-radius: 10px; text-transform: uppercase; }}
+  .capa-titulo {{ font-family: {font_display}; font-weight: 800;
+    font-size: 232px; line-height: 0.95; letter-spacing: -0.02em;
+    color: {p["white"]}; margin-top: 44px; text-wrap: balance;
+    max-width: 17ch; }}
+  .hook-hl {{ color: {p["lavender"]}; background-image: linear-gradient(
+    transparent 62%, {p["lavender"]}33 62%); background-repeat: no-repeat; }}
+  .handle {{ position: absolute; bottom: 120px; left: 180px;
+    font-family: {font_body}; font-size: 77px; font-weight: 600;
+    color: {p["white"]}; opacity: 0.85; letter-spacing: 0.08em; }}
+</style></head>
+<body>
+  {logo_top_img}
+  <div class="hero-window">{_hero}</div>
+  <div class="content">
+    <span class="badge">{_badge}</span>
+    <h1 class="capa-titulo">{_h_hook(titulo, is_consvicta)}</h1>
+  </div>
+  <div class="handle">{handle}</div>
+</body></html>
+"""
+
+        # Cor do titulo da capa: cromatica da marca, legivel no painel
+        # escuro (onix) onde o texto da capa fica. Corpo segue em sand.
+        capa_titulo_color = _pick_title_color(p["onix"], p["white"], p)
+        # Hook visual: se a copy marcou o trecho-chave com [[...]], a base do
+        # titulo fica neutra (branca) e o trecho marcado recebe a cor da
+        # marca + grifo (.hook-hl). Sem marcador, o titulo inteiro fica na
+        # cor da marca (comportamento anterior).
+        capa_has_hook = "[[" in (titulo or "")
+        capa_titulo_base = p["white"] if capa_has_hook else capa_titulo_color
+        # Divisor (linha decorativa) varia o estilo por carrossel.
+        capa_div_decl = (
+            brand_kit.divider_css(
+                brand_kit.pick_line_style(_CARROSSEL_SEED), p["mint"]
+            )
+            if _BRAND == "sindicompanybr"
+            else f'background:{p["mint"]};height:6px;border-radius:3px;'
         )
         return f"""
 <!doctype html><html><head><meta charset="utf-8">
@@ -1135,6 +7195,34 @@ def _slide_html(
     background-position: center;
     background-size: contain;
     opacity: 0.06;
+    pointer-events: none;
+    z-index: 1;
+  }}
+  .pattern-bg-capa {{
+    /* Pattern dark da Consvicta cobrindo a capa toda, 40% opacity
+       (peso visual do brand book). Senta entre o hero-img e o
+       overlay pro texto continuar legivel. */
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background-image: url('{capa_pattern_url}');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0.40;
+    pointer-events: none;
+    z-index: 1;
+  }}
+  .icon-bg-capa {{
+    /* Fundo Carrossel da capa Consvicta (slot 1 ou fallback logo
+       simbolo) — grande, baixa opacidade, rente a borda esquerda
+       inferior (mirror do bottom-right do icone). */
+    position: absolute;
+    bottom: 0; left: 0;
+    width: 2400px; height: 2400px;
+    background-image: url('{capa_fundo_url}');
+    background-repeat: no-repeat;
+    background-position: left bottom;
+    background-size: contain;
+    opacity: 0.12;
     pointer-events: none;
     z-index: 1;
   }}
@@ -1196,11 +7284,8 @@ def _slide_html(
     margin-bottom: 50px;
   }}
   .accent-line {{
-    /* Barra fina mint sob o badge — assinatura editorial. */
-    width: 180px; height: 6px;
-    background: {p["mint"]};
-    margin-bottom: 50px;
-    border-radius: 3px;
+    /* Divisor sob o badge — estilo varia por carrossel. */
+    width: 180px; margin-bottom: 50px; {capa_div_decl}
   }}
   .capa-titulo {{
     font-family: {font_display};
@@ -1208,9 +7293,18 @@ def _slide_html(
     font-size: {300 if is_consvicta else 257}px;
     line-height: {1.0 if is_consvicta else 0.95};
     letter-spacing: -0.015em;
-    color: {p["white"]};
+    color: {capa_titulo_base};
     text-wrap: balance;
     font-style: {('italic' if is_consvicta else 'normal')};
+  }}
+  /* Hook visual: trecho-chave do hook destacado — cor da marca + grifo
+     (marca-texto) na mesma cor em baixa opacidade. Leitura instantanea. */
+  .hook-hl {{
+    color: {capa_titulo_color};
+    background-image: linear-gradient(transparent 60%, {capa_titulo_color}33 60%);
+    background-repeat: no-repeat;
+    padding: 0 0.04em;
+    border-radius: 4px;
   }}
   .capa-body {{
     font-family: {font_body};
@@ -1299,12 +7393,14 @@ def _slide_html(
 <body>
   {bg}
   <div class="vignette"></div>
+  {capa_pattern_div}
+  {capa_fundo_div}
   {watermark_div}
   <div class="overlay"></div>
   <div class="content">
     <span class="badge">{_h(_formato_label(formato))}</span>
     <div class="accent-line"></div>
-    <h1 class="capa-titulo">{_h_with_data(titulo, is_consvicta)}</h1>
+    <h1 class="capa-titulo">{_h_hook(titulo, is_consvicta)}</h1>
     {body_html}
   </div>
   {logo_top_img}
@@ -1319,23 +7415,35 @@ def _slide_html(
     # Excecao: ULTIMO SLIDE (CTA) sempre fundo onix pra fechar o
     # carrossel com peso de marca.
     is_cta = tipo == "cta" or slide_idx == total
+    # Slide "respiro"/frase printavel: layout centralizado e minimalista
+    # (frase grande, muito espaco, sem badge/numero) — cria ritmo visual.
+    # Acionado por tipo frase/respiro/quote; nao afeta os slides normais.
+    is_frase = (tipo or "").strip().lower() in ("frase", "respiro", "quote") and not is_cta
     if is_cta:
         bg_color = p["onix"]
         fg_color = p["white"]
         accent = p["mint"]
         accent_text = p["onix"]
     else:
-        pares = [p["mint"], p["sand"]]
-        impares = [p["lavender"], p["white"], p["gray_5"]]
-        if slide_idx % 2 == 0:
-            bg_color = pares[(slide_idx // 2 - 1) % len(pares)]
+        if _BRAND == "sindicompanybr" and not is_frase:
+            # Fundo limpo do Brand Kit: base off-white (alterna Paper /
+            # Paper Warm pra variedade sutil) + glow por cima. Substitui o
+            # ciclo de cores solidas antigo.
+            bg_color = (
+                p["gray_5"] if slide_idx % 2 == 0 else brand_kit.NEUTRALS["paper_warm"]
+            )
         else:
-            bg_color = impares[((slide_idx - 1) // 2 - 1) % len(impares)]
+            pares = [p["mint"], p["sand"]]
+            impares = [p["lavender"], p["white"], p["gray_5"]]
+            if slide_idx % 2 == 0:
+                bg_color = pares[(slide_idx // 2 - 1) % len(pares)]
+            else:
+                bg_color = impares[((slide_idx - 1) // 2 - 1) % len(impares)]
 
         fg_color = p["onix"]
-        # Accent: nas cores muito claras (white / gray_5) usa mint pra
-        # destacar; nas medias (mint / sand / lavender) usa onix solido.
-        if bg_color in (p["white"], p["gray_5"]):
+        # Accent: nas cores muito claras (white / gray_5 / paper warm) usa
+        # mint pra destacar; nas medias (mint / sand / lavender) usa onix.
+        if bg_color in (p["white"], p["gray_5"], brand_kit.NEUTRALS["paper_warm"]):
             accent = p["mint"]
             accent_text = p["onix"]
         else:
@@ -1343,27 +7451,105 @@ def _slide_html(
             accent_text = p["white"]
 
     if is_cta:
-        if _BRAND == "consvictabr":
-            badge_label = "Consvicta"
-        elif _BRAND == "bysindicompany":
-            badge_label = "By Sindicompany"
-        else:
-            badge_label = "Sindicompany"
+        badge_label = _brand_label()
+    elif _BRAND == "sindicompanybr":
+        # Numero do slide fica SO na paginacao (canto). O badge do topo vira
+        # tag de categoria (formato), sem duplicar a numeracao.
+        badge_label = _formato_label(formato)
     else:
         badge_label = f"{slide_idx} / {total}"
 
+    # Cor do titulo distinta do corpo (fg_color) -> hierarquia cromatica.
+    # Puxada da paleta da marca por contraste; cai em fg se nada servir.
+    titulo_color = _pick_title_color(bg_color, fg_color, p)
+    # Divisor (linha decorativa) varia o estilo por carrossel.
+    content_div_decl = (
+        brand_kit.divider_css(brand_kit.pick_line_style(_CARROSSEL_SEED), accent)
+        if _BRAND == "sindicompanybr"
+        else f"background:{accent};height:6px;border-radius:3px;"
+    )
+    # Elemento "aspas" no slide de frase/respiro (tratamento de citacao).
+    # Usa o accent DA MARCA (varia por marca). Consvicta tem estetica
+    # propria -> nao recebe.
+    quote_mark_div = (
+        brand_kit.sc_quote_mark_html(accent)
+        if (is_frase and not is_consvicta)
+        else ""
+    )
+
     body_html = (
-        f'<p class="slide-body">{_h_with_data(body, is_consvicta)}</p>'
+        f'<p class="slide-body">{_h_hook(body, is_consvicta, "cta-acao" if is_cta else "body-hl")}</p>'
         if body
         else ""
     )
 
+    # Brand Kit: watermark de canto (petalas) discreto no topo-direito.
+    # So Sindicompany (Consvicta tem ambient proprio). CTA escuro usa canto
+    # cyan mais visivel; conteudo claro usa navy bem sutil.
+    corner_overlay_div = ""
+    if _BRAND == "sindicompanybr" and not is_frase:
+        _stat = "" if is_cta else brand_kit.detect_stat(body)
+        if is_cta:
+            corner_overlay_div = brand_kit.sc_corner_overlay_html(
+                "cyan", opacity=0.15, position="right top", size="44%"
+            )
+        elif _stat:
+            # Slide com dado claro (%, R$, "3 meses") -> stat block (numero
+            # de destaque) no lugar da decoracao. So quando ha o dado.
+            corner_overlay_div = brand_kit.sc_stat_block_html(_stat, titulo_color)
+        else:
+            # Decoracao rotativa: cada slide ganha uma forma/posicao de
+            # pattern diferente (ou o acento symbolPhoto), em opacidade baixa.
+            # Variedade entre slides e entre carrosseis.
+            corner_overlay_div = brand_kit.sc_slide_decor_html(
+                _CARROSSEL_SEED, slide_idx, p, foto_capa_url, color=_PATTERN_COLOR
+            )
+
+    # Brand Kit: receita de fundo. bg_color (hex) segue servindo o calculo
+    # de contraste; bg_css e o que pinta de fato. Sindicompany: CTA usa
+    # gradiente Deep Sea, respiro usa Sunset, conteudo mantem a cor base +
+    # glow radial sutil pra profundidade. Demais marcas: solido (legado).
+    bg_css = bg_color
+    glow_div = ""
+    if _BRAND == "sindicompanybr":
+        if is_cta:
+            bg_css = brand_kit.gradient_css("deep_sea")
+        elif is_frase:
+            bg_css = brand_kit.gradient_css("sunset")
+        else:
+            glow_div = brand_kit.sc_glow_overlay_html(
+                p["mint"], p["lavender"], op1=0.30, op2=0.26
+            )
+
+    # Estilo do botao da acao do CTA (.cta-acao). Sindicompany varia o estilo
+    # por carrossel (pill/square/aurora/sunset); demais usam o highlight
+    # accent legado.
+    if _BRAND == "sindicompanybr" and is_cta:
+        cta_acao_decl = brand_kit.cta_acao_css(
+            brand_kit.pick_cta_style(_CARROSSEL_SEED), p
+        )
+    else:
+        cta_acao_decl = (
+            f"background:{accent};color:{accent_text};"
+            f"font-weight:{600 if is_consvicta else 800};"
+            "padding:0.12em 0.34em;border-radius:14px;"
+            "-webkit-box-decoration-break:clone;box-decoration-break:clone;"
+        )
+
     # Pattern de fundo:
     # - Slides internos: pattern ciclando, tile 800x800, 10% opacity
-    # - CTA (ultimo): Pattern 1 fixo, mesma regra (tile 800x800, 10%)
-    if is_cta:
-        pats = _patterns_data_urls()
-        pattern_url = pats[0] if pats else ""
+    # - CTA (ultimo): Consvicta usa picker dark; outras marcas fixam
+    #   Pattern 1 (legado). Mesma regra tile/opacity.
+    # Sindicompany: NAO usa o tile antigo — o watermark de canto (Brand Kit)
+    # ja e a textura da marca; o tile competiria com glow/gradiente.
+    if _BRAND == "sindicompanybr":
+        pattern_url = ""
+    elif is_cta:
+        if is_consvicta:
+            pattern_url = _pattern_for_slide(slide_idx, is_cta=True)
+        else:
+            pats = _patterns_data_urls()
+            pattern_url = pats[0] if pats else ""
     else:
         pattern_url = _pattern_for_slide(slide_idx)
     pattern_div = '<div class="pattern-bg"></div>' if pattern_url else ""
@@ -1385,9 +7571,24 @@ def _slide_html(
         pagination_font = 77
         badge_font = 80
 
-    # Fundo Carrossel: usado como icon-bg grande nos slides internos.
-    # CTA NAO recebe — fica so com onix + pattern.
-    icon_url_internal = "" if is_cta else _icon_for_slide(slide_idx)
+    # Fundo Carrossel: usado como icon-bg grande nos slides.
+    # Consvicta: TODO slide (incluindo CTA) recebe pra enriquecer
+    # visualmente — _icon_for_slide tem fallback pro logo simbolo.
+    # Picker curado por tom do slide (light/dark). Outras marcas:
+    # CTA segue sem fundo (legado).
+    # Sindicompany: NAO usa o Fundo Carrossel legado — o Brand Kit ja tem
+    # glow + decoracao de pattern propria (senao o pattern antigo do bucket
+    # reaparece no fundo).
+    if _BRAND == "sindicompanybr":
+        icon_url_internal = ""
+    elif is_consvicta:
+        icon_url_internal = _icon_for_slide(
+            slide_idx, is_cta=is_cta, is_capa=False
+        )
+    elif not is_cta:
+        icon_url_internal = _icon_for_slide(slide_idx)
+    else:
+        icon_url_internal = ""
     icon_bg_div = (
         '<div class="icon-bg"></div>' if icon_url_internal else ""
     )
@@ -1428,10 +7629,10 @@ def _slide_html(
     icon_bleed_side_oposto = "left" if slide_idx % 2 == 0 else "right"
 
     # Watermark do logo Consvicta atras de tudo (mesmo padrao da capa).
-    watermark_url_internal = _logo_slot_data_url(2) if is_consvicta else ""
-    watermark_div_internal = (
-        f'<div class="logo-watermark"></div>' if watermark_url_internal else ""
-    )
+    # Watermark do logo nos slides internos/CTA — REMOVIDO por
+    # decisao de design pra Consvicta (limpa o fundo).
+    watermark_url_internal = ""
+    watermark_div_internal = ""
     # Logo SVG vem em preto. Em slide CLARO (internos mint/sand/etc.)
     # deixa preto. Em slide ESCURO (CTA onix), inverte pra branco
     # via filter CSS. Vale tanto pro .logo-top quanto pro
@@ -1448,7 +7649,7 @@ def _slide_html(
   html, body {{ width: {SLIDE_W}px; height: {SLIDE_H}px; }}
   body {{
     font-family: {font_body};
-    background: {bg_color};
+    background: {bg_css};
     color: {fg_color};
     overflow: hidden;
     position: relative;
@@ -1467,16 +7668,17 @@ def _slide_html(
     z-index: 1;
   }}
   .pattern-bg {{
-    /* Pattern da marca em 10% como textura de fundo nos slides internos.
-       Uma unica instancia que cobre todo o slide (cover preserva aspect
-       ratio do arquivo, recortando bordas se preciso). Sem repeat, sem
-       distorcao. */
+    /* Pattern da marca como textura de fundo. Sindicompany/By:
+       10% (textura sutil). Consvicta: 40% (peso visual do brand
+       book — os patterns sao parte do sistema visual, nao decoracao).
+       Uma unica instancia cobre todo o slide; cover preserva aspect
+       ratio. */
     position: absolute; top: 0; left: 0; right: 0; bottom: 0;
     background-image: url('{pattern_url}');
     background-repeat: no-repeat;
     background-position: center center;
     background-size: cover;
-    opacity: 0.10;
+    opacity: {0.40 if is_consvicta else 0.10};
     pointer-events: none;
   }}
   .frame-corner {{
@@ -1514,6 +7716,7 @@ def _slide_html(
     top: 50%;
     transform: translateY(-50%);
     z-index: 2;
+    {('text-align: center;' if is_frase else '')}
   }}
   .badge {{
     display: inline-block;
@@ -1530,22 +7733,20 @@ def _slide_html(
     box-shadow: 0 12px 40px rgba(0,0,0,0.12);
   }}
   .accent-line {{
-    /* Barra fina abaixo do badge — assinatura editorial. */
-    width: 180px; height: 6px;
-    background: {accent};
-    margin-bottom: 50px;
-    border-radius: 3px;
+    /* Divisor sob o badge — estilo varia por carrossel. */
+    width: 180px; margin-bottom: 50px; {content_div_decl}
   }}
   .slide-titulo {{
     font-family: {font_display};
     font-weight: {500 if is_consvicta else 800};
-    font-size: {(titulo_font + 30) if is_consvicta else titulo_font}px;
+    font-size: {(titulo_font + 70) if is_frase else ((titulo_font + 30) if is_consvicta else titulo_font)}px;
     line-height: {1.02 if is_consvicta else 0.95};
     letter-spacing: -0.015em;
-    color: {fg_color};
-    margin-bottom: 56px;
+    color: {titulo_color};
+    margin-bottom: {0 if is_frase else 56}px;
     text-wrap: balance;
-    max-width: 18ch;
+    max-width: {'16ch' if is_frase else '18ch'};
+    {('margin-left: auto; margin-right: auto;' if is_frase else '')}
     font-style: {('italic' if is_consvicta else 'normal')};
   }}
   .slide-body {{
@@ -1558,6 +7759,20 @@ def _slide_html(
     max-width: 22ch;
     letter-spacing: {('0.005em' if is_consvicta else 'normal')};
   }}
+  /* Ancora de atencao no corpo: trecho de alto impacto marcado com [[...]]
+     -> cor da marca (mesma do titulo do slide) + peso + grifo marca-texto.
+     Cria ritmo visual e impede blocos de texto iguais. */
+  .body-hl {{
+    color: {titulo_color};
+    font-weight: {600 if is_consvicta else 800};
+    background-image: linear-gradient(transparent 60%, {titulo_color}30 60%);
+    background-repeat: no-repeat;
+    border-radius: 4px;
+  }}
+  /* CTA: acao marcada vira BOTAO/caixa (cor da marca + texto contrastante
+     + seta leve) — parece acionavel, nunca escondido. */
+  .cta-acao {{ {cta_acao_decl} }}
+  .cta-acao::after {{ content: " \\2192"; }}
   /* Para palavras destacadas dentro do body — 55-70 display
      (mid 62 -> 176 css). Use <span class="destaque">…</span>. */
   .destaque {{
@@ -1679,18 +7894,21 @@ def _slide_html(
   }}
 </style></head>
 <body>
+  {glow_div}
   {pattern_div}
+  {corner_overlay_div}
   {('<div class="ambient-grid"></div><div class="ambient-orb ambient-orb-gold"></div><div class="ambient-orb ambient-orb-tiff"></div>') if is_consvicta else ''}
   {watermark_div_internal}
   {slide_foto_div}
   {icon_bg_div}
   <div class="frame-corner"></div>
-  <div class="bignum">{slide_idx:02d}</div>
+  {_slide_pagination(slide_idx, total, is_frase, accent, fg_color, font_numeric)}
   <div class="content">
-    <span class="badge">{_h(badge_label)}</span>
-    <div class="accent-line"></div>
+    {quote_mark_div}
+    {('' if is_frase else f'<span class="badge">{_h(badge_label)}</span>')}
+    {('' if is_frase else f'<div class="accent-line"></div>')}
     <h2 class="slide-titulo">{_h_with_data(titulo, is_consvicta)}</h2>
-    {body_html}
+    {('' if is_frase else body_html)}
   </div>
   {logo_top_img}
   <div class="handle">{handle}</div>
@@ -1700,7 +7918,37 @@ def _slide_html(
 
 
 def _h(s: str) -> str:
-    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    esc = (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    # Marcadores -> destaque (estilos .hl/.tns-hl injetados globalmente no
+    # render). Cobrem TODOS os templates (capa, internos, ~20 arquetipos)
+    # sem editar cada um, pra qualquer marca. Texto sem marcador nao muda.
+    #   [[...]]  -> grifo/marca-texto (.hl)        : hook, ancora, palavra magnetica
+    #   ~~...~~  -> sublinhado forte (.tns-hl)      : frase de TENSAO
+    esc = _HOOK_PATTERN.sub(r'<span class="hl">\1</span>', esc)
+    return _TENSION_PATTERN.sub(r'<span class="tns-hl">\1</span>', esc)
+
+
+# Marcadores de destaque. [[..]] = grifo; ~~..~~ = sublinhado (tensao).
+_HOOK_PATTERN = re.compile(r"\[\[(.+?)\]\]")
+_TENSION_PATTERN = re.compile(r"~~(.+?)~~")
+
+
+def _h_hook(s: str, enabled: bool, cls: str = "hook-hl") -> str:
+    """Renderiza o(s) trecho(s) marcado(s) com [[...]] como
+    <span class="{cls}">, pra destacar a parte mais forte do hook na capa
+    (cls=hook-hl) ou as ancoras de atencao no corpo (cls=body-hl). Fora do
+    trecho aplica _h_with_data normal. Sem marcador, igual a _h_with_data."""
+    s = s or ""
+    out: list[str] = []
+    last = 0
+    for m in _HOOK_PATTERN.finditer(s):
+        out.append(_h_with_data(s[last : m.start()], enabled))
+        out.append(
+            f'<span class="{cls}">{_h_with_data(m.group(1), enabled)}</span>'
+        )
+        last = m.end()
+    out.append(_h_with_data(s[last:], enabled))
+    return "".join(out)
 
 
 # Padrao pra detectar dados quantitativos em texto: "23%", "20+",
@@ -1739,6 +7987,22 @@ def _h_with_data(s: str, enabled: bool) -> str:
 # =============================================================================
 
 
+# Estilo do destaque generico .hl, injetado em TODO slide no render — cobre
+# capa classica, internos e os ~20 arquetipos sem editar cada template.
+# Marca-texto na cor do PROPRIO texto (color-mix) + peso: adapta a qualquer
+# fundo/cor/marca. Degrada pra so-negrito se o navegador ignorar color-mix.
+_HL_STYLE = (
+    "<style>.hl{font-weight:800;"
+    "background-image:linear-gradient(transparent 58%,"
+    "color-mix(in srgb, currentColor 22%, transparent) 58%);"
+    "background-repeat:no-repeat;border-radius:4px}"
+    # Tensao: sublinhado forte na cor do proprio texto (distinto do grifo).
+    ".tns-hl{font-weight:700;text-decoration:underline;"
+    "text-decoration-thickness:0.09em;text-underline-offset:0.12em;"
+    "text-decoration-skip-ink:none}</style>"
+)
+
+
 def _render_slide_png(html: str) -> bytes:
     """Renderiza HTML em PNG 3072×3839 via Playwright sync.
 
@@ -1757,22 +8021,33 @@ def _render_slide_png(html: str) -> bytes:
                 device_scale_factor=1,
             )
             page = ctx.new_page()
-            page.set_content(html, wait_until="networkidle")
-            # Aguarda TODAS as fontes (incluindo as inline base64) ficarem
-            # prontas pro layout. document.fonts.ready resolve quando o
-            # FontFaceSet termina de carregar todas as font-face
-            # declaracoes. Sem esse await, o screenshot pode capturar
-            # o frame ANTES das fontes da marca serem aplicadas.
+            html_out = (
+                html.replace("</head>", _HL_STYLE + "</head>", 1)
+                if "</head>" in html
+                else _HL_STYLE + html
+            )
+            page.set_content(html_out, wait_until="networkidle")
+            # Garante que TODAS as fontes da marca (inline base64) estejam
+            # carregadas E aplicadas antes do screenshot. Fontes @font-face
+            # carregam de forma PREGUICOSA (so quando usadas), entao forcamos
+            # o load de cada face e aguardamos document.fonts.ready. Sem isso,
+            # marcas com fontes pesadas (Consvicta = 2.3MB) podem ser
+            # capturadas no fallback serif (Georgia) — fonte fora da marca.
             try:
-                page.wait_for_function(
-                    "document.fonts && document.fonts.status === 'loaded'",
-                    timeout=15000,
+                page.evaluate(
+                    "async () => {"
+                    "  try { await Promise.all("
+                    "    Array.from(document.fonts).map((f) => f.load())"
+                    "  ); } catch (e) {}"
+                    "  if (document.fonts && document.fonts.ready) {"
+                    "    await document.fonts.ready;"
+                    "  }"
+                    "}"
                 )
             except Exception:  # noqa: BLE001
-                # Se o assert falhar (caso raro de bug do navegador),
-                # segue com o screenshot — melhor render parcial do
-                # que falha total.
                 pass
+            # Buffer pro layout/paint aplicar as fontes recem-carregadas.
+            page.wait_for_timeout(300)
             png = page.screenshot(
                 full_page=False,
                 type="png",
@@ -1973,7 +8248,27 @@ def _humanizer_pass(
         )
         return slides, legenda
 
-    rules = _BRAND_HUMANIZER_RULES.get(brand, _BRAND_HUMANIZER_RULES["sindicompanybr"])
+    # Marca nova: NAO cai nas regras da Sindicompany (handle/tom/assinatura
+    # dela vazariam). Constroi regras dinamicas com o handle/nome reais e um
+    # tom NEUTRO que preserva o nicho da marca — nunca injeta tema
+    # condominial/voz de sindico se o texto nao for disso.
+    rules = _BRAND_HUMANIZER_RULES.get(brand)
+    if rules is None:
+        nome = _BRAND_NAME or _BRAND
+        rules = {
+            "handle": _BRAND_HANDLE or f"@{brand}",
+            "assinatura": "",
+            "anti_leak": (
+                f"A marca aqui e SO {nome}. NAO mencione outras marcas/"
+                "concorrentes (Sindicompany, By Sindicompany, Consvicta)."
+            ),
+            "tom": (
+                f"Mantenha a VOZ e o NICHO de {nome} conforme o conteudo "
+                "recebido. NAO mude de assunto, NAO injete tema condominial, "
+                "sindico, assembleia nem morador a menos que o proprio texto "
+                "ja seja desse nicho."
+            ),
+        }
 
     payload = json.dumps(
         {
@@ -2027,7 +8322,17 @@ def _humanizer_pass(
         f"- ANTI-LEAK: {rules['anti_leak']}\n"
         f"- Assinatura/tagline desta conta: '{rules['assinatura']}' — "
         f"aparece SO na legenda, NUNCA num slide.\n"
-        "- Preserve 'tipo' e 'i' exatamente.\n\n"
+        "- Preserve 'tipo' e 'i' exatamente.\n"
+        "- DESTAQUE [[ ]] (ULTIMA etapa, depois de reescrever): GARANTA no SEU "
+        "output que estejam entre [[ ]] — adicione se faltar, mantenha se ja "
+        "houver. Marque: (1) no titulo do slide 'capa', o trecho MAIS FORTE do "
+        "hook (2 a 5 palavras); (2) no body de CADA slide de conteudo, 1 trecho "
+        "de alto impacto (verdade incomoda, identificacao, tensao, frase "
+        "memoravel ou palavra-chave forte) — no maximo 2 por slide; (3) no "
+        "ultimo slide (CTA), a ACAO principal. Esses [[ ]] viram o DESTAQUE "
+        "VISUAL da arte, entao TODO carrossel precisa te-los. PRESERVE tambem "
+        "os marcadores ~~ ~~ (frase de tensao -> sublinhado) exatamente onde "
+        "vierem. Nunca marque a legenda.\n\n"
         "Devolva JSON estrito (sem markdown, sem comentários):\n"
         '{"slides":[{"i":0,"tipo":"capa","titulo":"...","body":"..."},...],'
         '"legenda":"..."}\n\n'
@@ -2072,10 +8377,32 @@ def _humanizer_pass(
                 continue
             titulo = up.get("titulo")
             body = up.get("body")
+            # Trava deterministica: se o humanizer REDUZIU os marcadores
+            # [[ ]] de um campo (drop nao-deterministico do GPT), mantem o
+            # texto de ANTES — que ja tem os marcadores + acentos. Garante o
+            # destaque mesmo quando o GPT ignora a regra de preservar.
             if isinstance(titulo, str) and titulo.strip():
-                s["titulo"] = _apply_accent_dict(titulo)
+                new_t = _apply_accent_dict(titulo)
+                old_t = str(s.get("titulo") or "")
+                if (old_t.count("[[") > new_t.count("[[")
+                        or old_t.count("~~") > new_t.count("~~")):
+                    print(
+                        f"[carrossel] humanizer dropou destaque no titulo {i}; mantendo original",
+                        flush=True,
+                    )
+                else:
+                    s["titulo"] = new_t
             if isinstance(body, str):
-                s["body"] = _apply_accent_dict(body)
+                new_b = _apply_accent_dict(body)
+                old_b = str(s.get("body") or "")
+                if (old_b.count("[[") > new_b.count("[[")
+                        or old_b.count("~~") > new_b.count("~~")):
+                    print(
+                        f"[carrossel] humanizer dropou destaque no body {i}; mantendo original",
+                        flush=True,
+                    )
+                else:
+                    s["body"] = new_b
 
     new_legenda = data.get("legenda")
     if isinstance(new_legenda, str) and new_legenda.strip():
@@ -2101,9 +8428,106 @@ def _humanizer_pass(
 # =============================================================================
 
 
+def _auto_hook(text: str) -> str:
+    """Garante UM destaque [[ ]] num texto que nao tem nenhum, de forma
+    deterministica (sem LLM). Heuristica: destaca a ultima clausula (apos
+    virgula/;/:) se for curta, senao os ultimos ~60% das palavras (2 a 6),
+    sem engolir a pontuacao final. Usado como rede de seguranca final pra
+    o destaque NUNCA faltar."""
+    t = (text or "").strip()
+    if not t or "[[" in t:
+        return text
+    # Considera so a ULTIMA sentenca como base (o "payoff"); preserva as
+    # anteriores fora do destaque pra nao grifar atravessando o ponto.
+    sents = re.split(r"(?<=[.!?])\s+", t)
+    if len(sents) > 1 and len(sents[-1].split()) >= 2:
+        prefix = t[: t.rfind(sents[-1])]
+        base = sents[-1]
+    else:
+        prefix = ""
+        base = t
+    words = base.split()
+    if len(words) < 2:
+        return text
+    m = re.search(r"[,;:]\s+([^,;:]{3,})$", base)
+    if m and 2 <= len(m.group(1).split()) <= 7:
+        head = base[: m.start(1)]
+        tail = m.group(1)
+    else:
+        n = max(2, min(6, round(len(words) * 0.6)))
+        head = " ".join(words[:-n])
+        head = (head + " ") if head else ""
+        tail = " ".join(words[-n:])
+    pm = re.match(r"^(.*?)([.!?,;:]*)$", tail.strip())
+    core, punct = pm.group(1), pm.group(2)
+    if not core:
+        return text
+    return f"{prefix}{head}[[{core}]]{punct}"
+
+
+def _ensure_hooks(slides: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Rede de seguranca FINAL (apos humanizer + sanitizer): se um slide
+    ainda nao tem [[ ]], adiciona deterministicamente. Capa garante o hook
+    no titulo; slides de conteudo garantem 1 ancora no body. CTA e slides
+    'frase'/respiro sao deixados pro modelo (nao forca)."""
+    total = len(slides)
+    for i, s in enumerate(slides):
+        tipo = (s.get("tipo") or "").strip().lower()
+        is_capa = tipo == "capa" or i == 0
+        is_cta = tipo == "cta" or i == total - 1
+        is_frase = tipo in ("frase", "respiro", "quote")
+        # Considera [[ ]] (grifo) E ~~ ~~ (tensao) como "ja tem destaque".
+        if is_capa:
+            t = s.get("titulo") or ""
+            if "[[" not in t and "~~" not in t:
+                s["titulo"] = _auto_hook(t)
+        elif not is_cta and not is_frase:
+            body = s.get("body") or ""
+            if body.strip() and "[[" not in body and "~~" not in body:
+                s["body"] = _auto_hook(body)
+    return slides
+
+
+# Heuristica: o ultimo slide ja tem CTA? (verbo de acao ou pergunta no fim)
+_CTA_RX = re.compile(
+    r"comenta|salv[ae]|compartilh|manda|marca\b|segue|chama|link na bio|"
+    r"merece|responde|\?\s*$",
+    re.IGNORECASE,
+)
+_CTA_DEFAULTS = {
+    "comentarios": "[[Comenta]] o que você faria.",
+    "salvamentos": "[[Salva esse post]] pra usar depois.",
+    "clientes": "[[Chama a gente]] pra resolver isso.",
+    "autoridade": "[[Compartilha]] com quem precisa ver.",
+    "educar": "[[Salva esse post]] pra não esquecer.",
+}
+
+
+def _ensure_cta(
+    slides: list[dict[str, Any]], objetivo: str
+) -> list[dict[str, Any]]:
+    """Garante uma chamada para acao no ULTIMO slide. Se ele nao tiver CTA
+    (modelo as vezes termina so com frase memoravel), adiciona um default
+    por objetivo. Deterministico — o CTA NUNCA mais some."""
+    if not slides:
+        return slides
+    last = slides[-1]
+    txt = f"{last.get('titulo') or ''} {last.get('body') or ''}"
+    if _CTA_RX.search(txt):
+        return slides  # ja tem CTA (nao duplica)
+    cta = _CTA_DEFAULTS.get((objetivo or "").strip().lower(), "[[Salva esse post]].")
+    body = str(last.get("body") or "").rstrip()
+    last["body"] = (body + " " + cta).strip() if body else cta
+    print(f"[carrossel] CTA ausente no ultimo slide; adicionado default", flush=True)
+    return slides
+
+
 def gerar_carrossel(carrossel_id: str) -> int:
     """Pipeline completo. Retorna 0 se OK, 1 se falhou."""
-    global _BRAND
+    global _BRAND, _COVER_ARCHETYPE, _BRAND_PALETTE, _BRAND_PREFIX, _BRAND_HANDLE
+    global _BRAND_TIPOGRAFIA, _BRAND_NAME, _PAGINATION_STYLE, _CAPA_STYLE, _FORMATO
+    global _CARROSSEL_SEED, _PATTERN_COLOR
+    global _SC_NAVY, _SC_CYAN, _SC_BEIGE, _SC_LAVENDER, _SC_PURPLE, _SC_PAPER, _SC_PAPER_WARM
     print(f"[carrossel] iniciando geração de {carrossel_id}", flush=True)
     try:
         carrossel = _fetch_carrossel(carrossel_id)
@@ -2113,14 +8537,83 @@ def gerar_carrossel(carrossel_id: str) -> int:
 
         # Define a marca ANTES de qualquer lookup de asset (buckets,
         # handle, logo). Default sindicompanybr pra registros legacy.
+        # Mantem o slug REAL da marca (marca nova inclusive). Sanitiza pra
+        # [a-z0-9-] porque o slug vira parte de URL de storage. Vazio ->
+        # default sindicompanybr (registros legacy).
         b = (carrossel.get("brand") or "sindicompanybr").strip().lower()
-        if b == "bysindicompany":
-            _BRAND = "bysindicompany"
-        elif b == "consvictabr":
-            _BRAND = "consvictabr"
-        else:
-            _BRAND = "sindicompanybr"
+        _BRAND = re.sub(r"[^a-z0-9-]", "", b) or "sindicompanybr"
         print(f"[carrossel] brand={_BRAND}", flush=True)
+
+        # Identidade data-driven (tabela marcas): paleta + prefixo de bucket
+        # + handle. Para as 3 marcas chumbadas prefixo/handle continuam vindo
+        # das funcoes hardcoded; estes valores so sao usados por marca nova.
+        _marca = _fetch_marca(_BRAND)
+        _BRAND_PALETTE = _paleta_from_marca(_marca)
+        _BRAND_PREFIX = (_marca or {}).get("bucket_prefix") or ""
+        _BRAND_HANDLE = (_marca or {}).get("handle") or ""
+        _BRAND_NAME = (_marca or {}).get("nome") or ""
+        if _BRAND_PALETTE:
+            print(
+                f"[carrossel] paleta do DB ({len(_BRAND_PALETTE)} cores)",
+                flush=True,
+            )
+
+        # Arquetipos de capa (Brand Hub) usam as constantes _SC_* (cores
+        # Sindicompany) chumbadas em ~283 lugares. Pra MARCA NOVA, remapeia
+        # essas constantes pra paleta da marca de uma vez — todos os
+        # arquetipos passam a seguir as cores da marca. Sindicompany/By
+        # mantem as cores originais (zero regressao); Consvicta nao usa
+        # arquetipos.
+        if _BRAND not in ("sindicompanybr", "bysindicompany"):
+            _pal = _palette()
+            _SC_NAVY = _pal["onix"]
+            _SC_CYAN = _pal["mint"]
+            _SC_BEIGE = _pal["sand"]
+            _SC_LAVENDER = _pal["lavender"]
+            _SC_PURPLE = _pal.get("purple") or _pal["mint"]
+            _SC_PAPER = _pal["gray_5"]
+            _SC_PAPER_WARM = _pal["gray_5"]
+
+        # Tipografia data-driven só pra marca nova; as 3 chumbadas seguem
+        # com as fontes embutidas. Query separada (vide _fetch_marca_tipografia).
+        _BRAND_TIPOGRAFIA = None
+        if _BRAND not in ("sindicompanybr", "bysindicompany", "consvictabr"):
+            _BRAND_TIPOGRAFIA = _fetch_marca_tipografia(_BRAND)
+            if _BRAND_TIPOGRAFIA:
+                _faces = _BRAND_TIPOGRAFIA.get("faces") or []
+                print(
+                    f"[carrossel] tipografia do DB ({len(_faces)} faces)",
+                    flush=True,
+                )
+
+        # Brand Hub 2026-05-17: prefere o arquetipo escolhido pela
+        # editora no /carrossel/novo (coluna cover_archetype). Cai pra
+        # env var SINDICOMPANY_COVER_ARCHETYPE como fallback (uso legado
+        # via GitHub Variables). Sem nada setado, _slide_html mantem a
+        # capa classica.
+        ca_db = (carrossel.get("cover_archetype") or "").strip().lower()
+        ca_env = os.environ.get("SINDICOMPANY_COVER_ARCHETYPE", "").strip().lower()
+        _COVER_ARCHETYPE = ca_db or ca_env
+        _FORMATO = (carrossel.get("formato") or "").strip()
+        if _COVER_ARCHETYPE:
+            print(
+                f"[carrossel] cover_archetype={_COVER_ARCHETYPE}"
+                f" (source={'db' if ca_db else 'env'})",
+                flush=True,
+            )
+
+        # Paginacao: estilo escolhido por carrossel (deterministico pelo id)
+        # pra variar entre carrosseis sem mudar dentro do mesmo.
+        _PAGINATION_STYLE = brand_kit.pick_pagination_style(carrossel_id)
+        # Estilo de capa (classic/house) tambem varia por carrossel.
+        _CAPA_STYLE = brand_kit.pick_capa_style(carrossel_id)
+        _CARROSSEL_SEED = str(carrossel_id)
+        _PATTERN_COLOR = brand_kit.pick_pattern_color(carrossel_id)
+        print(
+            f"[carrossel] pagination={_PAGINATION_STYLE} capa={_CAPA_STYLE} "
+            f"pattern={_PATTERN_COLOR}",
+            flush=True,
+        )
 
         _update_carrossel(carrossel_id, {"status": "em_producao", "erro_mensagem": None})
 
@@ -2146,12 +8639,38 @@ def gerar_carrossel(carrossel_id: str) -> int:
             legenda = copy.get("legenda") or ""
             print(f"[carrossel] copy gerado pelo engine: {len(slides)} slides", flush=True)
 
+        # Remove slides TOTALMENTE vazios (o normalizador preenche com
+        # {tipo:texto, titulo:'', body:''} quando o modelo devolve menos
+        # slides que o pedido). Sem isso, o ultimo slide sai em branco e o
+        # CTA "some". Apos o filtro, o ultimo slide real volta a ser o CTA.
+        slides = [
+            s
+            for s in slides
+            if isinstance(s, dict)
+            and ((str(s.get("titulo") or "").strip()) or (str(s.get("body") or "").strip()))
+        ]
+        print(f"[carrossel] {len(slides)} slides com conteudo (vazios removidos)", flush=True)
+
         # 1b. Humanizer + revisão pt-BR — todas as marcas.
         # Roda DEPOIS da copy selecionada e ANTES do render dos slides.
         # Aplica accent-dict (sempre) + 1 batch GPT com SYSTEM_HUMANIZER
         # (se OPENAI_API_KEY disponivel). Regras por marca:
         # handle/assinatura/anti-leak/tom — vide _BRAND_HUMANIZER_RULES.
         slides, legenda = _humanizer_pass(slides, legenda, _BRAND)
+
+        # 1c. Rede de seguranca FINAL do destaque visual: garante [[ ]] em
+        # todo slide que ficou sem (deterministico, sem LLM). Ultima etapa
+        # de texto antes do render — o destaque NUNCA mais falta.
+        slides = _ensure_hooks(slides)
+        # Garante CTA no ultimo slide (deterministico) — o modelo as vezes
+        # termina so com frase memoravel; aqui o CTA nunca mais some.
+        slides = _ensure_cta(slides, str(carrossel.get("objetivo") or ""))
+        print(
+            f"[carrossel] ensure-hooks: "
+            f"{sum(1 for s in slides if '[[' in (s.get('titulo') or '') or '[[' in (s.get('body') or ''))}"
+            f"/{len(slides)} slides com destaque",
+            flush=True,
+        )
 
         # 2. Render + upload de cada slide
         n_total = len(slides)

@@ -1,0 +1,21 @@
+-- =============================================================
+-- Marcas — tipografia (identidade visual data-driven: fontes)
+-- =============================================================
+-- Adiciona marcas.tipografia (jsonb) com as fontes da marca. Shape:
+--   {
+--     "display": "'Marca Serif', Georgia, serif",   -- titulos
+--     "body":    "'Marca Sans', system-ui, sans-serif", -- corpo
+--     "numeric": "'Marca Sans', system-ui, sans-serif", -- numeros grandes
+--     "faces": [ {"family":"Marca Serif","weight":400,"style":"normal",
+--                 "file":"MarcaSerif-400.woff2"}, ... ]
+--   }
+-- As entradas "faces" sao geradas no cadastro a partir do ZIP de fontes
+-- (cada arquivo vira um @font-face no engine, embutido em base64). Os
+-- arquivos ficam no bucket condominios-fotos em {bucket_prefix}fonts/.
+--
+-- NAO faz seed: as 3 marcas atuais (sindicompanybr/bysindicompany/
+-- consvictabr) ficam com tipografia NULL e seguem usando as fontes
+-- embutidas no engine (Provicali/Epilogue, Cormorant/Outfit/Bebas) —
+-- ZERO regressao. So marca nova define tipografia por aqui.
+
+alter table public.marcas add column if not exists tipografia jsonb;

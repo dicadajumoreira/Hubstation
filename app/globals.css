@@ -2,15 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Provicali (wordmark Sindicompany) local — Brand Hub 2026-05-17. */
+@font-face {
+  font-family: "Provicali";
+  src: url("/fonts/Provicali.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Epilogue Variable — UI display + body. */
+@font-face {
+  font-family: "Epilogue";
+  src: url("/fonts/Epilogue-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Epilogue";
+  src: url("/fonts/Epilogue-VariableItalic.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
-  --mint: #56cfe1;
-  --onix: #1e1e24;
-  --g60: #6b7280;
+  /* Paleta oficial Sindicompany — Brand Hub 2026-05-17. */
+  --navy: #182028;
+  --cyan: #88c8d0;
+  --beige: #e0b098;
+  --lavender: #bfc0ff;
+  --purple: #8890d0;
+  --paper: #faf7f2;
+  --paper-warm: #f2ede5;
+  --line: #e5ddd2;
+  --muted: #8a8e96;
+
+  /* Aliases legacy (mantem compat com codigo que ja usa --mint, --onix, --g60). */
+  --mint: var(--cyan);
+  --onix: var(--navy);
+  --g60: var(--muted);
 }
 
 html,
 body {
-  background: #fafafa;
-  color: var(--onix);
+  background: var(--paper);
+  color: var(--navy);
   -webkit-font-smoothing: antialiased;
+  font-family: "Epilogue", system-ui, sans-serif;
 }

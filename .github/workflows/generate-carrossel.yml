@@ -51,5 +51,26 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: gpt-4o-mini
+          # Toggle do arquetipo de capa do Brand Hub 2026-05-17. Default
+          # vazio = capa classica (hero img + overlay escuro). Setar via
+          # GitHub Settings -> Variables. Valores aceitos do Brand Hub:
+          # SEM foto:
+          #   - editorial-question  (capa 01, com/sem foto)
+          #   - stat-slap           (capa 03, numero gigante sobre bege)
+          #   - numbered-guide      (capa 04, split numero/headline)
+          #   - manifesto           (capa 05, italic gigante sobre cyan)
+          #   - pattern-explosion   (capa 06, pattern topo + card paper)
+          #   - pull-quote          (capa 10, aspas bege gigantes + italic)
+          #   - headline-only       (capa 14, headline gigante sobre bege)
+          #   - glow-hero           (capa 23, simbolo + glows duplos navy)
+          # COM foto (usam a foto da etapa 3 do /carrossel/novo):
+          #   - dark-premium        (capa 02, foto full + gradient navy)
+          #   - magazine-cover      (capa 07, masthead + foto + paper)
+          #   - split-portrait      (capa 11, foto 45% + texto 55%)
+          #   - hero-portrait       (capa 25, foto full + tag + box bege)
+          #   - avatar-quote        (capa 33, avatar + citacao italic)
+          #   - photo-circle        (capa 38, circulo gigante TR + texto BL)
+          # So afeta as marcas @sindicompanybr e @bysindicompany.
+          SINDICOMPANY_COVER_ARCHETYPE: ${{ vars.SINDICOMPANY_COVER_ARCHETYPE }}
         run: |
           python -m api.carrossel_generate "${{ inputs.carrossel_id }}"

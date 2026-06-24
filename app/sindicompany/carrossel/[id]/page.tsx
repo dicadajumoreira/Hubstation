@@ -2,7 +2,10 @@ import { cookies } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/sindicompany/auth";
-import { getCarrossel } from "@/lib/sindicompany/carrosseis";
+import {
+  CARROSSEL_COVER_ARCHETYPES,
+  getCarrossel,
+} from "@/lib/sindicompany/carrosseis";
 import { DashboardShell } from "../../shell";
 import { CarrosselAutoRefresh } from "./refresh";
 import { LegendaCopy } from "./legenda-copy";
@@ -112,6 +115,20 @@ export default async function CarrosselDetailPage({
               <span className="text-xs text-g60">
                 {carrossel.n_slides ?? 6} slide{(carrossel.n_slides ?? 6) > 1 ? "s" : ""} · {carrossel.formato ?? "—"}
               </span>
+              {carrossel.cover_archetype &&
+                (() => {
+                  const arch = CARROSSEL_COVER_ARCHETYPES.find(
+                    (a) => a.id === carrossel.cover_archetype,
+                  );
+                  return (
+                    <span
+                      className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-onix-100 text-onix-800"
+                      title={arch?.hint ?? ""}
+                    >
+                      Capa: {arch?.label ?? carrossel.cover_archetype}
+                    </span>
+                  );
+                })()}
             </div>
           </div>
           {(carrossel.status === "rascunho" || carrossel.status === "erro") && (
@@ -223,7 +240,7 @@ export default async function CarrosselDetailPage({
             workflow pode ter falhado durante o upload dos slides. Confira os
             logs em{" "}
             <a
-              href="https://github.com/dicadajumoreira/Sindicompany.info/actions/workflows/generate-carrossel.yml"
+              href="https://github.com/dicadajumoreira/Hubstation/actions/workflows/generate-carrossel.yml"
               target="_blank"
               rel="noopener noreferrer"
               className="underline font-medium"

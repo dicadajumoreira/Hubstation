@@ -11,7 +11,6 @@ import {
   type CondoMeta,
 } from "@/lib/sindicompany/condominios-db";
 import {
-  copiarEquipeParaTodosAction,
   renomearCondominioAction,
   salvarCondoMetaAction,
 } from "./actions";
@@ -64,7 +63,6 @@ export default async function EditarCondoPage({
   const sp = await searchParams;
   const error = getStr(sp, "error");
   const renamed = getStr(sp, "renamed") === "1";
-  const equipeCopiada = getStr(sp, "equipe_copiada");
 
   const { meta, error: dbError } = await safeGetMeta(nome);
 
@@ -94,8 +92,8 @@ export default async function EditarCondoPage({
           </div>
           <h1 className="text-3xl font-bold text-onix-900">{nome}</h1>
           <p className="text-sm text-g60 mt-2 max-w-xl">
-            Cadastre síndico(a), gestor, equipe de atendimento, logos, contatos
-            e comunidade. Tudo fica salvo e é reaproveitado nas revistas.
+            Cadastre síndico(a), gestor, logos, contatos e comunidade. Tudo
+            fica salvo e é reaproveitado nas revistas.
           </p>
         </div>
         <Link
@@ -114,11 +112,6 @@ export default async function EditarCondoPage({
       {renamed && (
         <div className="mb-5 rounded-lg bg-mint-50 border border-mint-100 px-4 py-3 text-sm text-mint-700">
           Condomínio renomeado com sucesso.
-        </div>
-      )}
-      {equipeCopiada && (
-        <div className="mb-5 rounded-lg bg-mint-50 border border-mint-100 px-4 py-3 text-sm text-mint-700">
-          {equipeCopiada}
         </div>
       )}
 
@@ -638,72 +631,15 @@ export default async function EditarCondoPage({
           </Field>
         </section>
 
-        {/* ============ EQUIPE DE ATENDIMENTO ============ */}
+        {/* ============ CONTATO DO SÍNDICO NA REVISTA ============ */}
         <section className="bg-white rounded-xl border border-onix-100 p-6 space-y-5">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-mint-700">
-            Equipe de Atendimento
+            Contato do(a) síndico(a) na revista
           </h2>
           <p className="text-xs text-g60 -mt-3">
-            Até 5 pessoas que atendem o condomínio (foto, nome e cargo).
-            Aparecem na Revista de Boas-Vindas. Deixe nome/cargo em branco
-            pra slots não usados.
+            A equipe de atendimento agora é cadastrada em uma tela própria
+            (menu “Equipe de Atendimento”) e vale para todas as revistas.
           </p>
-          {[0, 1, 2, 3, 4].map((i) => {
-            const m = meta?.equipe_atendimento?.[i];
-            const fotoUrl = m?.foto_path ? getCondoFotoPublicUrl(m.foto_path) : null;
-            return (
-              <div
-                key={i}
-                className="rounded-lg border border-onix-100 p-3 flex items-center gap-3"
-              >
-                <div className="shrink-0">
-                  <input
-                    type="hidden"
-                    name={`equipe_foto_existente_${i + 1}`}
-                    value={m?.foto_path ?? ""}
-                  />
-                  {fotoUrl ? (
-                    <Image
-                      src={fotoUrl}
-                      alt={`Foto ${i + 1}`}
-                      width={56}
-                      height={56}
-                      unoptimized
-                      className="rounded-full object-cover w-14 h-14 border border-onix-100"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 rounded-full bg-onix-50 border border-onix-100" />
-                  )}
-                </div>
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    name={`equipe_nome_${i + 1}`}
-                    defaultValue={m?.nome ?? ""}
-                    maxLength={120}
-                    placeholder={`Nome (membro ${i + 1})`}
-                    className={inputCls}
-                  />
-                  <input
-                    type="text"
-                    name={`equipe_cargo_${i + 1}`}
-                    defaultValue={m?.cargo ?? ""}
-                    maxLength={120}
-                    placeholder="Cargo (ex: Analista de Atendimento)"
-                    className={inputCls}
-                  />
-                </div>
-                <div className="shrink-0">
-                  <input
-                    type="file"
-                    name={`equipe_foto_${i + 1}`}
-                    accept="image/jpeg,image/png,image/webp"
-                    className="block w-40 text-[11px] text-onix-800 file:mr-1 file:rounded file:border file:border-onix-100 file:bg-onix-50 file:px-2 file:py-1 file:text-[11px] file:font-medium hover:file:bg-onix-100"
-                  />
-                </div>
-              </div>
-            );
-          })}
 
           <Field
             label="Contato do(a) síndico(a) na revista"
@@ -789,32 +725,6 @@ export default async function EditarCondoPage({
           </Link>
         </div>
       </form>
-
-      {/* Copiar a equipe deste condominio para TODOS os outros condominios
-          cadastrados (e criar cadastro minimo pros da lista estatica que
-          ainda nao tem). Util quando a equipe operacional e a mesma. */}
-      {meta?.equipe_atendimento && meta.equipe_atendimento.length > 0 && (
-        <section className="mt-10 rounded-xl border border-onix-100 bg-white p-6">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-mint-700 mb-2">
-            Equipe de atendimento — replicar para todos
-          </h2>
-          <p className="text-sm text-g60 mb-4">
-            Copia a equipe de atendimento deste condomínio para <strong>todos os outros</strong>{" "}
-            condomínios. Para os que ainda não têm cadastro, cria um cadastro mínimo com a
-            equipe. Outros campos dos demais condomínios não são alterados.
-          </p>
-          <form action={copiarEquipeParaTodosAction}>
-            <input type="hidden" name="slug" value={slugifyCondo(nome)} />
-            <input type="hidden" name="condo_nome" value={nome} />
-            <button
-              type="submit"
-              className="inline-flex items-center px-4 py-2 rounded-lg bg-mint-600 text-white text-sm font-medium hover:bg-mint-700"
-            >
-              Replicar esta equipe para todos os condomínios
-            </button>
-          </form>
-        </section>
-      )}
 
       {/* Renomear condominio (acao separada). Atualiza meta + referencias em
           revistas e comunicados. Itens da lista estatica que tenham o mesmo
