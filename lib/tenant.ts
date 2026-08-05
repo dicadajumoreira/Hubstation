@@ -1,5 +1,6 @@
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "sindico.info";
 const SINDICOMPANY_DOMAIN = process.env.NEXT_PUBLIC_SINDICOMPANY_DOMAIN ?? "sindicompany.info";
+const HUBSTATION_DOMAIN = process.env.NEXT_PUBLIC_HUBSTATION_DOMAIN ?? "hubstation.com.br";
 
 const RESERVED_SUBDOMAINS = new Set([
   "www",
@@ -17,12 +18,23 @@ const RESERVED_SUBDOMAINS = new Set([
 export type TenantContext =
   | { kind: "root" }
   | { kind: "tenant"; slug: string }
-  | { kind: "sindicompany" };
+  | { kind: "sindicompany" }
+  | { kind: "hubstation" };
 
 export function resolveTenantFromHost(host: string | null): TenantContext {
   if (!host) return { kind: "root" };
 
   const cleanHost = host.split(":")[0].toLowerCase();
+
+  // Site institucional da HubStation (domínio próprio, conteúdo estático
+  // em public/hubstation — ver middleware.ts).
+  if (
+    cleanHost === HUBSTATION_DOMAIN ||
+    cleanHost === `www.${HUBSTATION_DOMAIN}` ||
+    cleanHost === "hubstation.localhost"
+  ) {
+    return { kind: "hubstation" };
+  }
 
   // Sindicompany backoffice (separate domain)
   if (

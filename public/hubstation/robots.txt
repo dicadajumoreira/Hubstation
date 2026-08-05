@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://hubstation.com.br/sitemap.xml
+
+# CSS e JS ficam liberados de propósito: o Google precisa renderizar a
+# página pra avaliar layout, mobile-friendliness e Core Web Vitals.
+Disallow: /.netlify/
+Disallow: /api/
